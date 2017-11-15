@@ -1,4 +1,0 @@
-INCLUDES = -Iinclude -I../UsageEnvironment/include
-PREFIX = /Users/baidu/Downloads/live555/dist
-LIBDIR = $(PREFIX)/lib
-##### Change the following for your environment:

@@ -564,14 +564,6 @@ FramedSource* ProxyServerMediaSubsession::createNewStreamSource(unsigned clientS
 	fClientMediaSubsession.addFilter(MPEG4VideoStreamDiscreteFramer
 					 ::createNew(envir(), fClientMediaSubsession.readSource(),
 						     True/* leave PTs unmodified*/));
-      } else if (strcmp(fCodecName, "MPV") == 0) {
-	fClientMediaSubsession.addFilter(MPEG1or2VideoStreamDiscreteFramer
-					 ::createNew(envir(), fClientMediaSubsession.readSource(),
-						     False, 5.0, True/* leave PTs unmodified*/));
-      } else if (strcmp(fCodecName, "DV") == 0) {
-	fClientMediaSubsession.addFilter(DVVideoStreamFramer
-					 ::createNew(envir(), fClientMediaSubsession.readSource(),
-						     False, True/* leave PTs unmodified*/));
       }
     }
 
@@ -663,23 +655,7 @@ RTPSink* ProxyServerMediaSubsession
   // Create (and return) the appropriate "RTPSink" object for our codec:
   // (Note: The configuration string might not be correct if a transcoder is used. FIX!) #####
   RTPSink* newSink;
-  if (strcmp(fCodecName, "AC3") == 0 || strcmp(fCodecName, "EAC3") == 0) {
-    newSink = AC3AudioRTPSink::createNew(envir(), rtpGroupsock, rtpPayloadTypeIfDynamic,
-					 fClientMediaSubsession.rtpTimestampFrequency()); 
-#if 0 // This code does not work; do *not* enable it:
-  } else if (strcmp(fCodecName, "AMR") == 0 || strcmp(fCodecName, "AMR-WB") == 0) {
-    Boolean isWideband = strcmp(fCodecName, "AMR-WB") == 0;
-    newSink = AMRAudioRTPSink::createNew(envir(), rtpGroupsock, rtpPayloadTypeIfDynamic,
-					 isWideband, fClientMediaSubsession.numChannels());
-#endif
-  } else if (strcmp(fCodecName, "DV") == 0) {
-    newSink = DVVideoRTPSink::createNew(envir(), rtpGroupsock, rtpPayloadTypeIfDynamic);
-  } else if (strcmp(fCodecName, "GSM") == 0) {
-    newSink = GSMAudioRTPSink::createNew(envir(), rtpGroupsock);
-  } else if (strcmp(fCodecName, "H263-1998") == 0 || strcmp(fCodecName, "H263-2000") == 0) {
-    newSink = H263plusVideoRTPSink::createNew(envir(), rtpGroupsock, rtpPayloadTypeIfDynamic,
-					      fClientMediaSubsession.rtpTimestampFrequency()); 
-  } else if (strcmp(fCodecName, "H264") == 0) {
+  if (strcmp(fCodecName, "H264") == 0) {
     newSink = H264VideoRTPSink::createNew(envir(), rtpGroupsock, rtpPayloadTypeIfDynamic,
 					  fClientMediaSubsession.fmtp_spropparametersets());
   } else if (strcmp(fCodecName, "H265") == 0) {
@@ -700,34 +676,15 @@ RTPSink* ProxyServerMediaSubsession
 					     fClientMediaSubsession.rtpTimestampFrequency(),
 					     fClientMediaSubsession.attrVal_unsigned("profile-level-id"),
 					     fClientMediaSubsession.fmtp_config()); 
-  } else if (strcmp(fCodecName, "MPA") == 0) {
-    newSink = MPEG1or2AudioRTPSink::createNew(envir(), rtpGroupsock);
-  } else if (strcmp(fCodecName, "MPA-ROBUST") == 0) {
-    newSink = MP3ADURTPSink::createNew(envir(), rtpGroupsock, rtpPayloadTypeIfDynamic);
   } else if (strcmp(fCodecName, "MPEG4-GENERIC") == 0) {
     newSink = MPEG4GenericRTPSink::createNew(envir(), rtpGroupsock,
 					     rtpPayloadTypeIfDynamic, fClientMediaSubsession.rtpTimestampFrequency(),
 					     fClientMediaSubsession.mediumName(),
 					     fClientMediaSubsession.attrVal_str("mode"),
 					     fClientMediaSubsession.fmtp_config(), fClientMediaSubsession.numChannels());
-  } else if (strcmp(fCodecName, "MPV") == 0) {
-    newSink = MPEG1or2VideoRTPSink::createNew(envir(), rtpGroupsock);
   } else if (strcmp(fCodecName, "OPUS") == 0) {
     newSink = SimpleRTPSink::createNew(envir(), rtpGroupsock, rtpPayloadTypeIfDynamic,
 				       48000, "audio", "OPUS", 2, False/*only 1 Opus 'packet' in each RTP packet*/);
-  } else if (strcmp(fCodecName, "T140") == 0) {
-    newSink = T140TextRTPSink::createNew(envir(), rtpGroupsock, rtpPayloadTypeIfDynamic);
-  } else if (strcmp(fCodecName, "THEORA") == 0) {
-    newSink = TheoraVideoRTPSink::createNew(envir(), rtpGroupsock, rtpPayloadTypeIfDynamic,
-					    fClientMediaSubsession.fmtp_config()); 
-  } else if (strcmp(fCodecName, "VORBIS") == 0) {
-    newSink = VorbisAudioRTPSink::createNew(envir(), rtpGroupsock, rtpPayloadTypeIfDynamic,
-					    fClientMediaSubsession.rtpTimestampFrequency(), fClientMediaSubsession.numChannels(),
-					    fClientMediaSubsession.fmtp_config()); 
-  } else if (strcmp(fCodecName, "VP8") == 0) {
-    newSink = VP8VideoRTPSink::createNew(envir(), rtpGroupsock, rtpPayloadTypeIfDynamic);
-  } else if (strcmp(fCodecName, "VP9") == 0) {
-    newSink = VP9VideoRTPSink::createNew(envir(), rtpGroupsock, rtpPayloadTypeIfDynamic);
   } else if (strcmp(fCodecName, "AMR") == 0 || strcmp(fCodecName, "AMR-WB") == 0) {
     // Proxying of these codecs is currently *not* supported, because the data received by the "RTPSource" object is not in a
     // form that can be fed directly into a corresponding "RTPSink" object.

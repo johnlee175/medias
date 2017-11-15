@@ -74,7 +74,6 @@ void FramedSource::getNextFrame(unsigned char* to, unsigned maxSize,
   fOnCloseFunc = onCloseFunc;
   fOnCloseClientData = onCloseClientData;
   fIsCurrentlyAwaitingData = True;
-  envir() << "IsCurrentlyAwaitingData=True\n";
 
   doGetNextFrame();
 }
@@ -82,7 +81,6 @@ void FramedSource::getNextFrame(unsigned char* to, unsigned maxSize,
 void FramedSource::afterGetting(FramedSource* source) {
   source->nextTask() = NULL;
   source->fIsCurrentlyAwaitingData = False;
-  source->envir() << "IsCurrentlyAwaitingData=False\n";
       // indicates that we can be read again
       // Note that this needs to be done here, in case the "fAfterFunc"
       // called below tries to read another frame (which it usually will)
@@ -102,7 +100,6 @@ void FramedSource::handleClosure(void* clientData) {
 
 void FramedSource::handleClosure() {
   fIsCurrentlyAwaitingData = False; // because we got a close instead
-  envir() << "IsCurrentlyAwaitingData=False\n";
   if (fOnCloseFunc != NULL) {
     (*fOnCloseFunc)(fOnCloseClientData);
   }
@@ -110,7 +107,6 @@ void FramedSource::handleClosure() {
 
 void FramedSource::stopGettingFrames() {
   fIsCurrentlyAwaitingData = False; // indicates that we can be read again
-  envir() << "IsCurrentlyAwaitingData=False\n";
   fAfterGettingFunc = NULL;
   fOnCloseFunc = NULL;
 
