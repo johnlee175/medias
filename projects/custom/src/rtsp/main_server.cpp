@@ -103,7 +103,7 @@ public:
         LOGW("onOpen\n");
         closed = false;
         queue = new SyncQueue(500);
-        if (!(stream = create_x264_module(width, height, nullptr, nullptr, on_encoded_frame))) {
+        if (!(stream = create_x264_module(width, height, -1, nullptr, nullptr, on_encoded_frame))) {
             LOGW("create_x264_module failed!\n");
         }
         pthread_create(&pthread, nullptr, do_x264_encode, this);

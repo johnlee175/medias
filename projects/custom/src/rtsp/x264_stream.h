@@ -31,8 +31,13 @@ typedef void (*OnFrameEncodedFunc)(uint8_t *payload, uint32_t size);
 
 typedef struct X264Stream X264Stream;
 
-/** preset = { "faster", "fast", "medium", "slow", "slower" }; profile = { "high", "main", "baseline" }; **/
-X264Stream *create_x264_module(int width, int height, const char *preset, const char *profile,
+/**
+ * csp, preset, profile see <x264.h>.
+ * csp is macro start with X264_CSP_*, preset and profile see x264_preset_names[], x264_profile_names[].
+ * if want default value, set csp = -1(default I420), preset = NULL(default "medium"), profile = NULL(default "high").
+ */
+X264Stream *create_x264_module(int width, int height,
+                               int csp, const char *preset, const char *profile,
                                OnFrameEncodedFunc func);
 int append_i420_frame(X264Stream *stream, uint8_t *frame_data);
 int encode_x264_frame(X264Stream *stream);

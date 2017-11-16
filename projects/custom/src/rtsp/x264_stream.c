@@ -36,7 +36,8 @@ struct X264Stream {
     OnFrameEncodedFunc func;
 };
 
-X264Stream *create_x264_module(int width, int height, const char *preset, const char *profile,
+X264Stream *create_x264_module(int width, int height,
+                               int csp, const char *preset, const char *profile,
                                OnFrameEncodedFunc func) {
     X264Stream *stream = (X264Stream *) malloc(sizeof(X264Stream));
     if (!stream) {
@@ -54,7 +55,7 @@ X264Stream *create_x264_module(int width, int height, const char *preset, const 
     }
 
     /* Configure non-default params */
-    param.i_csp = X264_CSP_I420;
+    param.i_csp = (csp > 0 ? csp : X264_CSP_I420);
     param.i_width = stream->width = width;
     param.i_height = stream->height = height;
     param.b_vfr_input = 0;
