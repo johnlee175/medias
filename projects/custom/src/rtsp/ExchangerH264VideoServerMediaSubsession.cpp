@@ -39,6 +39,8 @@ ExchangerH264VideoServerMediaSubsession::createNew(UsageEnvironment &env,
     return new ExchangerH264VideoServerMediaSubsession(env, reuseFirstSource);
 }
 
+unsigned ExchangerH264VideoServerMediaSubsession::preferBitrate = 500;
+
 static void
 afterPlayingDummy(void* clientData) {
     auto* subsess = static_cast<ExchangerH264VideoServerMediaSubsession*>(clientData);
@@ -108,7 +110,7 @@ ExchangerH264VideoServerMediaSubsession::getAuxSDPLine(RTPSink *rtpSink,
 FramedSource *
 ExchangerH264VideoServerMediaSubsession::createNewStreamSource(unsigned clientSessionId,
                                                                unsigned &estBitrate) {
-    estBitrate = 500; // kbps, estimate
+    estBitrate = preferBitrate <= 0 ? 500 : preferBitrate; // kbps, estimate
     return H264VideoStreamFramer::createNew(envir(), ExchangerDeviceSource::createNew(envir()));
 }
 

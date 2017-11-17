@@ -26,6 +26,8 @@
 
 class ExchangerH264VideoServerMediaSubsession: public OnDemandServerMediaSubsession {
 public:
+    static unsigned preferBitrate;
+public:
     static ExchangerH264VideoServerMediaSubsession *createNew(UsageEnvironment &env, const Boolean &reuseFirstSource);
     // Used to implement "getAuxSDPLine()":
     void checkForAuxSDPLine1();

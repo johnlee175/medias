@@ -161,7 +161,7 @@ static int test_x264() {
     // ffmpeg -i data/cuc_ieschool.mp4 -c:v rawvideo -pix_fmt yuv420p data/cuc_ieschool.yuv
     const char *yuv_file = "data/cuc_ieschool.yuv";
     X264Stream *stream = NULL;
-    if (!(stream = create_x264_module(width, height, NULL, NULL, on_frame_encoded))) {
+    if (!(stream = create_x264_module(width, height, -1, NULL, NULL, on_frame_encoded))) {
         LOGW("create_x264_module failed!\n");
         return -1;
     }
