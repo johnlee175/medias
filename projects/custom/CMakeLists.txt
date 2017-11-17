@@ -4,6 +4,8 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_BUILD_TYPE Debug)
 
+add_definitions(-DALLOW_SERVER_PORT_REUSE)
+
 include_directories(
         x264/include
         ffmpeg/include

@@ -28,6 +28,7 @@
 struct X264Stream {
     int width;
     int height;
+    int format;
     x264_picture_t *pic_in;
     x264_picture_t *pic_out;
     x264_t *h;
@@ -55,7 +56,7 @@ X264Stream *create_x264_module(int width, int height,
     }
 
     /* Configure non-default params */
-    param.i_csp = (csp > 0 ? csp : X264_CSP_I420);
+    param.i_csp = stream->format = (csp > 0 ? csp : X264_CSP_I420);
     param.i_width = stream->width = width;
     param.i_height = stream->height = height;
     param.b_vfr_input = 0;
@@ -96,10 +97,18 @@ X264Stream *create_x264_module(int width, int height,
 
 int append_i420_frame(X264Stream *stream, uint8_t *frame_data) {
     int luma_size = stream->width * stream->height;
-    int chroma_size = luma_size / 4;
-    memcpy(stream->pic_in->img.plane[0], frame_data, luma_size);
-    memcpy(stream->pic_in->img.plane[1], frame_data + luma_size, chroma_size);
-    memcpy(stream->pic_in->img.plane[2], frame_data + luma_size + chroma_size, chroma_size);
+    if (stream->format == X264_CSP_I420 || stream->format == X264_CSP_YV12) {
+        int chroma_size = luma_size / 4;
+        memcpy(stream->pic_in->img.plane[0], frame_data, luma_size);
+        memcpy(stream->pic_in->img.plane[1], frame_data + luma_size, chroma_size);
+        memcpy(stream->pic_in->img.plane[2], frame_data + luma_size + chroma_size, chroma_size);
+    } else if (stream->format == X264_CSP_NV12 || stream->format == X264_CSP_NV21) {
+        memcpy(stream->pic_in->img.plane[0], frame_data, luma_size);
+        memcpy(stream->pic_in->img.plane[1], frame_data + luma_size, luma_size);
+    } else {
+        LOGW("Found not support format yet!\n");
+        return -1;
+    }
 
     ++stream->pic_in->i_pts;
 
