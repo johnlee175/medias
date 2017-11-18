@@ -19,6 +19,7 @@
  * @version 2017-11-14
  */
 #include "rtsp_ffmpeg_client.h"
+#include <iostream>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
@@ -29,11 +30,10 @@ static void on_frame_rtsp(uint8_t *data[8], int line_size[8],
     cv::waitKey(1);
 }
 
-static void test_rtsp() {
+static void test_rtsp(const char *url) {
     cv::namedWindow("Image Window", cv::WINDOW_AUTOSIZE);
 
-    RtspClient *client = open_rtsp("rtsp://192.168.1.101:8554/testH264",
-                                   AV_PIX_FMT_BGR24, on_frame_rtsp);
+    RtspClient *client = open_rtsp(url, AV_PIX_FMT_BGR24, on_frame_rtsp);
     if (client) {
         loop_read_rtsp_frame(client);
         close_rtsp(client);
@@ -41,6 +41,10 @@ static void test_rtsp() {
 }
 
 int main(int argc, char **argv) {
-    test_rtsp();
+    if (argc < 2) {
+        std::cout << "Need a argument that indicate rtsp URL" << std::endl;
+        return 0;
+    }
+    test_rtsp(argv[1]);
     return 0;
 }

@@ -21,6 +21,8 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 
 #include "MPEGVideoStreamParser.hh"
 #include <GroupsockHelper.hh>
+#include <common.h>
+#include <ExchangerH264VideoServerMediaSubsession.hpp>
 
 ////////// TimeCode implementation //////////
 
@@ -53,6 +55,19 @@ MPEGVideoStreamFramer::~MPEGVideoStreamFramer() {
 void MPEGVideoStreamFramer::flushInput() {
   reset();
   if (fParser != NULL) fParser->flushInput();
+}
+
+void MPEGVideoStreamFramer::setFrameRate(double frameRate) {
+  if (ExchangerH264VideoServerMediaSubsession::preferFramerate > 0
+      && ExchangerH264VideoServerMediaSubsession::preferFramerate < 512) {
+    fFrameRate = ExchangerH264VideoServerMediaSubsession::preferFramerate;
+  } else {
+    fFrameRate = frameRate;
+  }
+}
+
+double MPEGVideoStreamFramer::getFrameRate() {
+  return fFrameRate;
 }
 
 void MPEGVideoStreamFramer::reset() {
@@ -169,9 +184,8 @@ void MPEGVideoStreamFramer::continueReadProcessing() {
     fDurationInMicroseconds
       = (fFrameRate == 0.0 || ((int)fPictureCount) < 0) ? 0
       : (unsigned)((fPictureCount*1000000)/fFrameRate);
-#ifdef DEBUG
-    fprintf(stderr, "%d bytes @%u.%06d, fDurationInMicroseconds: %d ((%d*1000000)/%f)\n", acquiredFrameSize, fPresentationTime.tv_sec, fPresentationTime.tv_usec, fDurationInMicroseconds, fPictureCount, fFrameRate);
-#endif
+    LOGW("%d bytes @%u.%06d, fDurationInMicroseconds: %d ((%d*1000000)/%f)\n", acquiredFrameSize,
+         fPresentationTime.tv_sec, fPresentationTime.tv_usec, fDurationInMicroseconds, fPictureCount, fFrameRate);
     fPictureCount = 0;
 
     // Call our own 'after getting' function.  Because we're not a 'leaf'

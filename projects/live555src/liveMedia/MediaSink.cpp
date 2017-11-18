@@ -110,7 +110,11 @@ Boolean MediaSink::isRTPSink() const {
 
 ////////// OutPacketBuffer //////////
 
+#ifdef OutPacketBufferMaxSize
+unsigned OutPacketBuffer::maxSize = OutPacketBufferMaxSize; // by default
+#else
 unsigned OutPacketBuffer::maxSize = 60000; // by default
+#endif
 
 OutPacketBuffer
 ::OutPacketBuffer(unsigned preferredPacketSize, unsigned maxPacketSize, unsigned maxBufferSize)

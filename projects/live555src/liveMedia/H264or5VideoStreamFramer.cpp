@@ -18,6 +18,7 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 // A filter that breaks up a H.264 or H.265 Video Elementary Stream into NAL units.
 // Implementation
 
+#include <common.h>
 #include "H264or5VideoStreamFramer.hh"
 #include "MPEGVideoStreamParser.hh"
 #include "BitVector.hh"
@@ -84,7 +85,8 @@ H264or5VideoStreamFramer
     ? new H264or5VideoStreamParser(hNumber, this, inputSource, includeStartCodeInOutput)
     : NULL;
   fNextPresentationTime = fPresentationTimeBase;
-  fFrameRate = 25.0; // We assume a frame rate of 25 fps, unless we learn otherwise (from parsing a VPS or SPS NAL unit)
+  setFrameRate(25.0); // We assume a frame rate of 25 fps, unless we learn otherwise (from parsing a VPS or SPS NAL
+  // unit)
 }
 
 H264or5VideoStreamFramer::~H264or5VideoStreamFramer() {
@@ -922,11 +924,9 @@ void H264or5VideoStreamParser
       // If "DeltaTfiDivisor" has changed, and we've already computed the frame rate, then
       // adjust it, based on the new value of "DeltaTfiDivisor":
       if (DeltaTfiDivisor != prevDeltaTfiDivisor && fParsedFrameRate != 0.0) {
-	  usingSource()->fFrameRate = fParsedFrameRate
-	    = fParsedFrameRate*(prevDeltaTfiDivisor/DeltaTfiDivisor);
-#ifdef DEBUG
-	  fprintf(stderr, "Changed frame rate to %f fps\n", usingSource()->fFrameRate);
-#endif
+        fParsedFrameRate = fParsedFrameRate*(prevDeltaTfiDivisor/DeltaTfiDivisor);
+	  usingSource()->setFrameRate(fParsedFrameRate);
+	  LOGW("Changed frame rate to %f fps\n", usingSource()->getFrameRate());
       }
     }
     // Ignore the rest of the payload (timestamps) for now... #####
@@ -1053,15 +1053,12 @@ unsigned H264or5VideoStreamParser::parse() {
 	unsigned num_units_in_tick, time_scale;
 	analyze_video_parameter_set_data(num_units_in_tick, time_scale);
 	if (time_scale > 0 && num_units_in_tick > 0) {
-	  usingSource()->fFrameRate = fParsedFrameRate
-	    = time_scale/(DeltaTfiDivisor*num_units_in_tick);
-#ifdef DEBUG
-	  fprintf(stderr, "Set frame rate to %f fps\n", usingSource()->fFrameRate);
-#endif
+      fParsedFrameRate = time_scale/(DeltaTfiDivisor*num_units_in_tick);
+	  usingSource()->setFrameRate(fParsedFrameRate);
+	  LOGW("Set frame rate to %f fps\n", usingSource()->getFrameRate());
 	} else {
-#ifdef DEBUG
-	  fprintf(stderr, "\tThis \"Video Parameter Set\" NAL unit contained no frame rate information, so we use a default frame rate of %f fps\n", usingSource()->fFrameRate);
-#endif
+      LOGW("\tThis \"Video Parameter Set\" NAL unit contained no frame rate information, so we use a default frame "
+                   "rate of %f fps\n", usingSource()->getFrameRate());
 	}
       }
     } else if (isSPS(nal_unit_type)) { // Sequence parameter set
@@ -1074,15 +1071,12 @@ unsigned H264or5VideoStreamParser::parse() {
 	unsigned num_units_in_tick, time_scale;
 	analyze_seq_parameter_set_data(num_units_in_tick, time_scale);
 	if (time_scale > 0 && num_units_in_tick > 0) {
-	  usingSource()->fFrameRate = fParsedFrameRate
-	    = time_scale/(DeltaTfiDivisor*num_units_in_tick);
-#ifdef DEBUG
-	  fprintf(stderr, "Set frame rate to %f fps\n", usingSource()->fFrameRate);
-#endif
+      fParsedFrameRate = time_scale/(DeltaTfiDivisor*num_units_in_tick);
+	  usingSource()->setFrameRate(fParsedFrameRate);
+      LOGW("Set frame rate to %f fps\n", usingSource()->getFrameRate());
 	} else {
-#ifdef DEBUG
-	  fprintf(stderr, "\tThis \"Sequence Parameter Set\" NAL unit contained no frame rate information, so we use a default frame rate of %f fps\n", usingSource()->fFrameRate);
-#endif
+      LOGW("\tThis \"Sequence Parameter Set\" NAL unit contained no frame rate information, so we use a default frame"
+                   " rate of %f fps\n", usingSource()->getFrameRate());
 	}
       }
     } else if (isPPS(nal_unit_type)) { // Picture parameter set
@@ -1094,11 +1088,9 @@ unsigned H264or5VideoStreamParser::parse() {
     }
 
     usingSource()->setPresentationTime();
-#ifdef DEBUG
     unsigned long secs = (unsigned long)usingSource()->fPresentationTime.tv_sec;
     unsigned uSecs = (unsigned)usingSource()->fPresentationTime.tv_usec;
-    fprintf(stderr, "\tPresentation time: %lu.%06u\n", secs, uSecs);
-#endif
+    LOGW("\tPresentation time: %lu.%06u\n", secs, uSecs);
 
     // Now, check whether this NAL unit ends an 'access unit'.
     // (RTP streamers need to know this in order to figure out whether or not to set the "M" bit.)
@@ -1135,16 +1127,14 @@ unsigned H264or5VideoStreamParser::parse() {
     }
 	
     if (thisNALUnitEndsAccessUnit) {
-#ifdef DEBUG
-      fprintf(stderr, "*****This NAL unit ends the current access unit*****\n");
-#endif
+      LOGW("*****This NAL unit ends the current access unit*****\n");
       usingSource()->fPictureEndMarker = True;
       ++usingSource()->fPictureCount;
 
       // Note that the presentation time for the next NAL unit will be different:
       struct timeval& nextPT = usingSource()->fNextPresentationTime; // alias
       nextPT = usingSource()->fPresentationTime;
-      double nextFraction = nextPT.tv_usec/1000000.0 + 1/usingSource()->fFrameRate;
+      double nextFraction = nextPT.tv_usec/1000000.0 + 1/usingSource()->getFrameRate();
       unsigned nextSecsIncrement = (long)nextFraction;
       nextPT.tv_sec += (long)nextSecsIncrement;
       nextPT.tv_usec = (long)((nextFraction - nextSecsIncrement)*1000000);
@@ -1153,9 +1143,7 @@ unsigned H264or5VideoStreamParser::parse() {
 
     return curFrameSize();
   } catch (int /*e*/) {
-#ifdef DEBUG
-    fprintf(stderr, "H264or5VideoStreamParser::parse() EXCEPTION (This is normal behavior - *not* an error)\n");
-#endif
+    LOGW("H264or5VideoStreamParser::parse() EXCEPTION (This is normal behavior - *not* an error)\n");
     return 0;  // the parsing got interrupted
   }
 }

@@ -56,7 +56,18 @@ RtspClient *open_rtsp(const char *rtsp_url, enum AVPixelFormat pixel_format, Fra
     client->frame_callback = frame_callback;
 
     avformat_network_init();
-    if (avformat_open_input(&client->format_context, rtsp_url, NULL, NULL)) {
+
+    AVDictionary* options = NULL;
+    av_dict_set(&options, "buffer_size", "3276800", 0); /* libavformat/udp.c */
+    av_dict_set(&options, "pkt_size", "10240", 0); /* libavformat/udp.c */
+    av_dict_set(&options, "fifo_size", "655350", 0); /* libavformat/udp.c */
+    av_dict_set(&options, "reorder_queue_size", "2000", 0); /* libavformat/rtsp.c */
+    av_dict_set(&options, "stimeout", "5000000", 0); /* libavformat/rtsp.c */
+    av_dict_set(&options, "rtsp_transport", "tcp", 0); /* libavformat/rtsp.c */
+    av_dict_set(&options, "max_delay", "1000000", 0); /* libavformat/options_table.h */
+    av_dict_set(&options, "packetsize", "10240", 0); /* libavformat/options_table.h */
+    av_dict_set(&options, "rtbufsize", "11059200", 0); /* libavformat/options_table.h */
+    if (avformat_open_input(&client->format_context, rtsp_url, NULL, &options)) {
         LOGW("avformat_open_input failed!\n");
         return NULL;
     }
@@ -159,25 +170,37 @@ void loop_read_rtsp_frame(RtspClient *client) {
         return;
     }
 
-    while (av_read_frame(client->format_context, packet) >= 0) {
+    int result_code;
+    while ((result_code = av_read_frame(client->format_context, packet)) >= 0) {
         if (packet->stream_index == client->video_stream_index) {
-            if (avcodec_send_packet(client->codec_context, packet)) {
-                LOGW("avcodec_send_packet failed!\n");
+#ifdef BACKUP_STREAM
+            static FILE *bak;
+            if (!bak) {
+                bak = fopen("temp/x.h264", "ab");
+            }
+            if (bak) {
+                fwrite(packet->data, packet->size, 1, bak);
+                fflush(bak);
+            }
+#endif /* BACKUP_STREAM */
+#ifndef ONLY_BACKUP
+            if ((result_code = avcodec_send_packet(client->codec_context, packet))) {
+                LOGW("avcodec_send_packet failed with code %d!\n", result_code);
                 goto end;
             }
 
             double_t pts;
 
-            while (avcodec_receive_frame(client->codec_context, frame_decoded) >= 0) {
+            while ((result_code = avcodec_receive_frame(client->codec_context, frame_decoded)) >= 0) {
                 if ((pts = av_frame_get_best_effort_timestamp(frame_decoded)) == AV_NOPTS_VALUE) {
                     pts = 0;
                 }
                 pts *= av_q2d(client->format_context->streams[client->video_stream_index]->time_base);
 
-                if (sws_scale(client->sws_context, (const uint8_t *const *)frame_decoded->data,
+                if ((result_code = sws_scale(client->sws_context, (const uint8_t *const *)frame_decoded->data,
                               frame_decoded->linesize, 0, client->codec_context->height,
-                              frame_result->data, frame_result->linesize) < 0) {
-                    LOGW("sws_scale failed!\n");
+                              frame_result->data, frame_result->linesize)) < 0) {
+                    LOGW("sws_scale failed with code %d!\n", result_code);
                     goto end;
                 }
 
@@ -188,9 +211,12 @@ void loop_read_rtsp_frame(RtspClient *client) {
                                            (int64_t) (pts * 1000));
                 }
             }
+            LOGW("avcodec_receive_frame result_code=%d\n", result_code);
+#endif /* ONLY_BACKUP */
         }
         av_packet_unref(packet);
     }
+    LOGW("av_read_frame result_code=%d\n", result_code);
 
     end:
     av_free(buffer);

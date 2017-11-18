@@ -27,6 +27,7 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 #include "MPEGVideoStreamParser.hh"
 #include "MPEG4LATMAudioRTPSource.hh" // for "parseGeneralConfigStr()"
 #include <string.h>
+#include <common.h>
 
 ////////// MPEG4VideoStreamParser definition //////////
 
@@ -217,9 +218,7 @@ unsigned MPEG4VideoStreamParser::parse() {
     }
     }
   } catch (int /*e*/) {
-#ifdef DEBUG
-    fprintf(stderr, "MPEG4VideoStreamParser::parse() EXCEPTION (This is normal behavior - *not* an error)\n");
-#endif
+    LOGW("MPEG4VideoStreamParser::parse() EXCEPTION (This is normal behavior - *not* an error)\n");
     return 0;  // the parsing got interrupted
   }
 }
@@ -232,16 +231,12 @@ unsigned MPEG4VideoStreamParser::parse() {
 
 unsigned MPEG4VideoStreamParser
 ::parseVisualObjectSequence(Boolean haveSeenStartCode) {
-#ifdef DEBUG
-  fprintf(stderr, "parsing VisualObjectSequence\n");
-#endif
+  LOGW("parsing VisualObjectSequence\n");
   usingSource()->startNewConfig();
   u_int32_t first4Bytes;
   if (!haveSeenStartCode) {
     while ((first4Bytes = test4Bytes()) != VISUAL_OBJECT_SEQUENCE_START_CODE) {
-#ifdef DEBUG
-      fprintf(stderr, "ignoring non VS header: 0x%08x\n", first4Bytes);
-#endif
+      LOGW("ignoring non VS header: 0x%08x\n", first4Bytes);
       get1Byte(); setParseState(PARSING_VISUAL_OBJECT_SEQUENCE);
           // ensures we progress over bad data
     }
@@ -254,9 +249,7 @@ unsigned MPEG4VideoStreamParser
 
   // The next byte is the "profile_and_level_indication":
   u_int8_t pali = get1Byte();
-#ifdef DEBUG
-  fprintf(stderr, "profile_and_level_indication: %02x\n", pali);
-#endif
+  LOGW("profile_and_level_indication: %02x\n", pali);
   saveByte(pali);
   usingSource()->fProfileAndLevelIndication = pali;
 
@@ -283,9 +276,7 @@ static inline Boolean isVideoObjectStartCode(u_int32_t code) {
 }
 
 unsigned MPEG4VideoStreamParser::parseVisualObject() {
-#ifdef DEBUG
-  fprintf(stderr, "parsing VisualObject\n");
-#endif
+  LOGW("parsing VisualObject\n");
   // Note that we've already read the VISUAL_OBJECT_START_CODE
   save4Bytes(VISUAL_OBJECT_START_CODE);
 
@@ -294,17 +285,13 @@ unsigned MPEG4VideoStreamParser::parseVisualObject() {
   Boolean is_visual_object_identifier = (nextByte&0x80) != 0;
   u_int8_t visual_object_type;
   if (is_visual_object_identifier) {
-#ifdef DEBUG
-    fprintf(stderr, "visual_object_verid: 0x%x; visual_object_priority: 0x%x\n", (nextByte&0x78)>>3, (nextByte&0x07));
-#endif
+    LOGW("visual_object_verid: 0x%x; visual_object_priority: 0x%x\n", (nextByte&0x78)>>3, (nextByte&0x07));
     nextByte = get1Byte(); saveByte(nextByte);
     visual_object_type = (nextByte&0xF0)>>4;
   } else {
     visual_object_type = (nextByte&0x78)>>3;
   }
-#ifdef DEBUG
-  fprintf(stderr, "visual_object_type: 0x%x\n", visual_object_type);
-#endif
+  LOGW("visual_object_type: 0x%x\n", visual_object_type);
   // At present, we support only the "Video ID" "visual_object_type" (1)
   if (visual_object_type != 1) {
     usingSource()->envir() << "MPEG4VideoStreamParser::parseVisualObject(): Warning: We don't handle visual_object_type " << visual_object_type << "\n";
@@ -317,9 +304,7 @@ unsigned MPEG4VideoStreamParser::parseVisualObject() {
     saveToNextCode(next4Bytes);
   }
   save4Bytes(next4Bytes);
-#ifdef DEBUG
-  fprintf(stderr, "saw a video_object_start_code: 0x%08x\n", next4Bytes);
-#endif
+  LOGW("saw a video_object_start_code: 0x%08x\n", next4Bytes);
 
   setParseState(PARSING_VIDEO_OBJECT_LAYER);
 
@@ -387,9 +372,7 @@ void MPEG4VideoStreamParser::analyzeVOLHeader() {
     }
 
     if (!getNextFrameBits(16, vop_time_increment_resolution)) break;
-#ifdef DEBUG
-    fprintf(stderr, "vop_time_increment_resolution: %d\n", vop_time_increment_resolution);
-#endif
+    LOGW("vop_time_increment_resolution: %d\n", vop_time_increment_resolution);
     if (vop_time_increment_resolution == 0) {
       usingSource()->envir() << "MPEG4VideoStreamParser::analyzeVOLHeader(): vop_time_increment_resolution is zero!\n";
       break;
@@ -410,19 +393,15 @@ void MPEG4VideoStreamParser::analyzeVOLHeader() {
     if (fixed_vop_rate) {
       // Get the following "fixed_vop_time_increment":
       if (!getNextFrameBits(fNumVTIRBits, fixed_vop_time_increment)) break;
-#ifdef DEBUG
-      fprintf(stderr, "fixed_vop_time_increment: %d\n", fixed_vop_time_increment);
+      LOGW("fixed_vop_time_increment: %d\n", fixed_vop_time_increment);
       if (fixed_vop_time_increment == 0) {
-	usingSource()->envir() << "MPEG4VideoStreamParser::analyzeVOLHeader(): fixed_vop_time_increment is zero!\n";
+	    usingSource()->envir() << "MPEG4VideoStreamParser::analyzeVOLHeader(): fixed_vop_time_increment is zero!\n";
       }
-#endif
     }
     // Use "vop_time_increment_resolution" as the 'frame rate'
     // (really, 'tick rate'):
-    usingSource()->fFrameRate = (double)vop_time_increment_resolution;
-#ifdef DEBUG
-    fprintf(stderr, "fixed_vop_rate: %d; 'frame' (really tick) rate: %f\n", fixed_vop_rate, usingSource()->fFrameRate);
-#endif
+    usingSource()->setFrameRate((double)vop_time_increment_resolution);
+    LOGW("fixed_vop_rate: %d; 'frame' (really tick) rate: %f\n", fixed_vop_rate, usingSource()->getFrameRate());
 
     return;
   } while (0);
@@ -435,9 +414,7 @@ void MPEG4VideoStreamParser::analyzeVOLHeader() {
 }
 
 unsigned MPEG4VideoStreamParser::parseVideoObjectLayer() {
-#ifdef DEBUG
-  fprintf(stderr, "parsing VideoObjectLayer\n");
-#endif
+  LOGW("parsing VideoObjectLayer\n");
   // The first 4 bytes must be a "video_object_layer_start_code".
   // If not, this is a 'short video header', which we currently
   // don't support:
@@ -470,9 +447,7 @@ unsigned MPEG4VideoStreamParser::parseVideoObjectLayer() {
 }
 
 unsigned MPEG4VideoStreamParser::parseGroupOfVideoObjectPlane() {
-#ifdef DEBUG
-  fprintf(stderr, "parsing GroupOfVideoObjectPlane\n");
-#endif
+  LOGW("parsing GroupOfVideoObjectPlane\n");
   // Note that we've already read the GROUP_VOP_START_CODE
   save4Bytes(GROUP_VOP_START_CODE);
 
@@ -516,9 +491,7 @@ unsigned MPEG4VideoStreamParser::parseGroupOfVideoObjectPlane() {
 }
 
 unsigned MPEG4VideoStreamParser::parseVideoObjectPlane() {
-#ifdef DEBUG
-  fprintf(stderr, "#parsing VideoObjectPlane\n");
-#endif
+  LOGW("#parsing VideoObjectPlane\n");
   // Note that we've already read the VOP_START_CODE
   save4Bytes(VOP_START_CODE);
 
@@ -558,9 +531,7 @@ unsigned MPEG4VideoStreamParser::parseVideoObjectPlane() {
     vop_time_increment >>= 1;
     mask >>= 1;
   }
-#ifdef DEBUG
-  fprintf(stderr, "vop_coding_type: %d(%c), modulo_time_base: %d, vop_time_increment: %d\n", vop_coding_type, "IPBS"[vop_coding_type], modulo_time_base, vop_time_increment);
-#endif
+  LOGW("vop_coding_type: %d(%c), modulo_time_base: %d, vop_time_increment: %d\n", vop_coding_type, "IPBS"[vop_coding_type], modulo_time_base, vop_time_increment);
 
   // Now, copy all bytes that we see, up until we reach a code of some sort:
   saveToNextCode(next4Bytes);
@@ -582,9 +553,7 @@ unsigned MPEG4VideoStreamParser::parseVideoObjectPlane() {
       // This is apparently a buggy MPEG-4 video stream, because
       // "vop_time_increment" did not change.  Overcome this error,
       // by pretending that it did change.
-#ifdef DEBUG
-      fprintf(stderr, "Buggy MPEG-4 video stream: \"vop_time_increment\" did not change!\n");
-#endif
+      LOGW("Buggy MPEG-4 video stream: \"vop_time_increment\" did not change!\n");
       // The following assumes that we don't have 'B' frames.  If we do, then TARFU!
       usingSource()->fPictureCount += vop_time_increment;
       fTotalTicksSinceLastTimeCode += vop_time_increment;
@@ -596,9 +565,7 @@ unsigned MPEG4VideoStreamParser::parseVideoObjectPlane() {
 	// "vop_time_increment" wraps around, but without
 	// "modulo_time_base" changing (or just having had a new time code).
 	// Overcome this by pretending that "vop_time_increment" *did* wrap around:
-#ifdef DEBUG
-	fprintf(stderr, "Buggy MPEG-4 video stream: \"vop_time_increment\" wrapped around, but without \"modulo_time_base\" changing!\n");
-#endif
+    LOGW("Buggy MPEG-4 video stream: \"vop_time_increment\" wrapped around, but without \"modulo_time_base\" changing!\n");
 	++fSecondsSinceLastTimeCode;
 	newTotalTicks += vop_time_increment_resolution;
       }
@@ -666,9 +633,7 @@ unsigned MPEG4VideoStreamParser::parseVideoObjectPlane() {
 }
 
 unsigned MPEG4VideoStreamParser::parseVisualObjectSequenceEndCode() {
-#ifdef DEBUG
-  fprintf(stderr, "parsing VISUAL_OBJECT_SEQUENCE_END_CODE\n");
-#endif
+  LOGW("parsing VISUAL_OBJECT_SEQUENCE_END_CODE\n");
   // Note that we've already read the VISUAL_OBJECT_SEQUENCE_END_CODE
   save4Bytes(VISUAL_OBJECT_SEQUENCE_END_CODE);
 

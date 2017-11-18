@@ -42,6 +42,9 @@ public:
 
   void flushInput(); // called if there is a discontinuity (seeking) in the input
 
+  void setFrameRate(double frameRate);
+  double getFrameRate();
+
 protected:
   MPEGVideoStreamFramer(UsageEnvironment& env, FramedSource* inputSource);
       // we're an abstract base class
@@ -65,7 +68,6 @@ private:
   void continueReadProcessing();
 
 protected:
-  double fFrameRate; // Note: For MPEG-4, this is really a 'tick rate'
   unsigned fPictureCount; // hack used to implement doGetNextFrame()
   Boolean fPictureEndMarker;
   struct timeval fPresentationTimeBase;
@@ -75,6 +77,7 @@ protected:
   friend class MPEGVideoStreamParser; // hack
 
 private:
+  double fFrameRate; // Note: For MPEG-4, this is really a 'tick rate'
   TimeCode fCurGOPTimeCode, fPrevGOPTimeCode;
   unsigned fPicturesAdjustment;
   double fPictureTimeBase;

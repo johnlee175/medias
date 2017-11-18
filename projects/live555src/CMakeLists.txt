@@ -11,6 +11,9 @@ set(CMAKE_CXX_STANDARD 11)
 #set(CMAKE_BUILD_TYPE Debug)
 #set(CMAKE_BUILD_TYPE Release)
 
+add_definitions(-DOutPacketBufferMaxSize=240000)
+add_definitions(-DALLOW_SERVER_PORT_REUSE)
+
 include_directories(
         UsageEnvironment/include
         BasicUsageEnvironment/include
@@ -30,11 +33,20 @@ set(SOURCE_FILES
         ${groupsockSrc}
         ${liveMediaSrc}
 )
+message("CMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}")
 
-#on mac os x
-#add_library(live555 STATIC ${SOURCE_FILES})
-#on android
-add_library(live555 SHARED ${SOURCE_FILES})
+if (APPLE)
+    #on mac os x
+    message("APPLE")
+    message("CMAKE_HOST_APPLE=${CMAKE_HOST_APPLE}")
+    add_library(live555 STATIC ${SOURCE_FILES})
+elseif(ANDROID)
+    #on android
+    message("ANDROID")
+    find_library(log-lib log)
+    add_library(live555 SHARED ${SOURCE_FILES})
+    target_link_libraries(live555 ${log-lib})
+endif()
 
 add_executable(testOnDemandRTSPServer testProgs/testOnDemandRTSPServer.cpp)
 target_link_libraries(testOnDemandRTSPServer live555)

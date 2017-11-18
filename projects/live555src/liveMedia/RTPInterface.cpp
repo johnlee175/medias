@@ -24,6 +24,42 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 #include <GroupsockHelper.hh>
 #include <stdio.h>
 
+static int parsingRTPPacket(uint8_t *data, size_t size) {
+  if (size < 12) { // Too short to be invalid RTP header.
+    return -1;
+  }
+  if ((data[0] >> 6) != 2) { // Currently, the version is 2, if is not 2, unsupported.
+    return -1;
+  }
+  if (data[0] & 0x20) { // Padding present.
+    int paddingLength = data[size - 1];
+    if (paddingLength + 12 > size) {
+      return -1;
+    }
+    size -= paddingLength;
+  }
+  int numCSRCs = data[0] & 0x0f;
+  int payloadOffset = 12 + 4 * numCSRCs;
+  if (size < payloadOffset) {
+    // Not enough data to fit the basic header and all the CSRC entries.
+    return -1;
+  }
+  if (data[0] & 0x10) { // Header extension present.
+    if (size < payloadOffset + 4) {
+      // Not enough data to fit the basic header,
+      // all CSRC entries and thef irst 4 bytes of the extension header.
+      return -1;
+    }
+    uint8_t *extensionData = &data[payloadOffset];
+    int extensionLength = 4 * (extensionData[2] << 8 | extensionData[3]);
+    if (size < payloadOffset + 4 + extensionLength) {
+      return -1;
+    }
+    payloadOffset += (4 + extensionLength);
+  }
+  return payloadOffset;
+}
+
 ////////// Helper Functions - Definition //////////
 
 // Helper routines and data structures, used to implement
