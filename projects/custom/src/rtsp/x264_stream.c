@@ -37,20 +37,53 @@ struct X264Stream {
     OnFrameEncodedFunc func;
 };
 
-X264Stream *create_x264_module(int width, int height,
-                               int csp, const char *preset, const char *profile,
-                               OnFrameEncodedFunc func) {
+void default_param_config(void *x264_param_type) {
+    x264_param_t *param = x264_param_type;
+    const int framerate = 25;
+    const int bitrate = 500; /* kbps */
+
+    param->i_level_idc = 30;
+    param->i_nal_hrd = X264_NAL_HRD_VBR;
+
+    param->i_fps_num = (uint32_t) framerate;
+    param->i_fps_den = 1;
+    param->i_keyint_max = framerate * 2;
+    param->i_frame_reference = 10;
+
+    param->rc.i_rc_method = X264_RC_ABR;
+    param->rc.i_bitrate = bitrate;
+    param->rc.i_vbv_max_bitrate = (int) (bitrate * 1.2);
+    param->rc.i_vbv_buffer_size = param->rc.i_bitrate;
+    param->rc.f_vbv_buffer_init = 0.9;
+    param->rc.b_mb_tree = 0;
+    param->rc.f_rf_constant = 25;
+    param->rc.f_rf_constant_max = 45;
+    param->rc.f_rate_tolerance = 0.01;
+
+    param->b_vfr_input = 0;
+    param->b_repeat_headers = 1;
+    param->b_annexb = 1;
+    param->b_aud = 1;
+    param->b_cabac = 1;
+
+    param->i_log_level = X264_LOG_NONE;
+}
+
+X264Stream *create_x264_module(int width, int height, int csp,
+                               const char *preset, const char *profile, const char *tune,
+                               OnParamConfigFunc config_func, OnFrameEncodedFunc encoded_func) {
     X264Stream *stream = (X264Stream *) malloc(sizeof(X264Stream));
     if (!stream) {
         LOGW("malloc X264Stream failed!\n");
         return NULL;
     }
     memset(stream, 0, sizeof(X264Stream));
-    stream->func = func;
+    stream->func = encoded_func;
 
     x264_param_t param;
     /* Get default params for preset/tuning */
-    if (x264_param_default_preset(&param, (preset ? preset : "medium"), NULL) < 0) {
+    if (x264_param_default_preset(&param, (preset ? preset : "medium"),
+                                  (tune ? tune : NULL)) < 0) {
         LOGW("x264_param_default_preset failed!\n");
         return NULL;
     }
@@ -59,9 +92,11 @@ X264Stream *create_x264_module(int width, int height,
     param.i_csp = stream->format = (csp > 0 ? csp : X264_CSP_I420);
     param.i_width = stream->width = width;
     param.i_height = stream->height = height;
-    param.b_vfr_input = 0;
-    param.b_repeat_headers = 1;
-    param.b_annexb = 1;
+    if (config_func) {
+        config_func(&param);
+    } else {
+        default_param_config(&param);
+    }
 
     /* Apply profile restrictions. */
     if (x264_param_apply_profile(&param, (profile ? profile : "high")) < 0) {
@@ -170,7 +205,8 @@ static int test_x264() {
     // ffmpeg -i data/cuc_ieschool.mp4 -c:v rawvideo -pix_fmt yuv420p data/cuc_ieschool.yuv
     const char *yuv_file = "data/cuc_ieschool.yuv";
     X264Stream *stream = NULL;
-    if (!(stream = create_x264_module(width, height, -1, NULL, NULL, on_frame_encoded))) {
+    if (!(stream = create_x264_module(width, height, -1, NULL, NULL, "zerolatency",
+                                      NULL, on_frame_encoded))) {
         LOGW("create_x264_module failed!\n");
         return -1;
     }

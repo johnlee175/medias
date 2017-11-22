@@ -15,3 +15,9 @@ see configure relace "libx264.so.$API" => "libx264.$API.so"
 make && make install
 
 Usages: -lm -ldl -lx264
+
+Build For Mac OS X:
+#0. On Mac: otool -L <dylib file>
+#1. On Mac: install_name_tool -id @executable_path/<new dylib relative-path> <dylib file>
+#2. On Mac: install_name_tool -id @rpath/<new dylib relative-path> <dylib file>
+#2. On Mac: install_name_tool -add_rpath <your rpath> <executable file>

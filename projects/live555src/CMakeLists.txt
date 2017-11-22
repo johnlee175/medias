@@ -1,5 +1,6 @@
 #If build on mac os x, please use commands like:
 # mkdir build && cd build && cmake \
+# -DCMAKE_INSTALL_PREFIX=dist \
 # -DCMAKE_C_COMPILER=/usr/local/Cellar/gcc/7.2.0/bin/gcc-7 \
 # -DCMAKE_CXX_COMPILER=/usr/local/Cellar/gcc/7.2.0/bin/g++-7 \
 # -DCMAKE_C_FLAGS=-fpermissive -DCMAKE_CXX_FLAGS=-fpermissive ../
@@ -19,13 +20,26 @@ include_directories(
         BasicUsageEnvironment/include
         groupsock/include
         liveMedia/include
-        liveMedia
-)
+        liveMedia)
 
-file(GLOB_RECURSE UsageEnvironmentSrc UsageEnvironment/*.c UsageEnvironment/*.cpp)
-file(GLOB_RECURSE BasicUsageEnvironmentSrc BasicUsageEnvironment/*.c BasicUsageEnvironment/*.cpp)
-file(GLOB_RECURSE groupsockSrc groupsock/*.c groupsock/*.cpp)
-file(GLOB_RECURSE liveMediaSrc liveMedia/*.c liveMedia/*.cpp)
+file(GLOB_RECURSE Headers
+        UsageEnvironment/*.h UsageEnvironment/*.hpp
+        UsageEnvironment/*.hh UsageEnvironment/*.hxx
+        BasicUsageEnvironment/*.h BasicUsageEnvironment/*.hpp
+        BasicUsageEnvironment/*.hh BasicUsageEnvironment/*.hxx
+        groupsock/*.h groupsock/*.hpp
+        groupsock/*.hh groupsock/*.hxx
+        liveMedia/*.h liveMedia/*.hpp
+        liveMedia/*.hh liveMedia/*.hxx)
+
+file(GLOB_RECURSE UsageEnvironmentSrc UsageEnvironment/*.c UsageEnvironment/*.cpp
+        UsageEnvironment/*.cc UsageEnvironment/*.cxx)
+file(GLOB_RECURSE BasicUsageEnvironmentSrc BasicUsageEnvironment/*.c BasicUsageEnvironment/*.cpp
+        BasicUsageEnvironment/*.cc BasicUsageEnvironment/*.cxx)
+file(GLOB_RECURSE groupsockSrc groupsock/*.c groupsock/*.cpp
+        groupsock/*.cc groupsock/*.cxx)
+file(GLOB_RECURSE liveMediaSrc liveMedia/*.c liveMedia/*.cpp
+        liveMedia/*.cc liveMedia/*.cxx)
 
 set(SOURCE_FILES
         ${UsageEnvironmentSrc}
@@ -39,7 +53,7 @@ if (APPLE)
     #on mac os x
     message("APPLE")
     message("CMAKE_HOST_APPLE=${CMAKE_HOST_APPLE}")
-    add_library(live555 STATIC ${SOURCE_FILES})
+    add_library(live555 SHARED ${SOURCE_FILES})
 elseif(ANDROID)
     #on android
     message("ANDROID")
@@ -50,3 +64,9 @@ endif()
 
 add_executable(testOnDemandRTSPServer testProgs/testOnDemandRTSPServer.cpp)
 target_link_libraries(testOnDemandRTSPServer live555)
+
+install(TARGETS live555 testOnDemandRTSPServer
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib/static)
+install(FILES ${Headers} DESTINATION include)

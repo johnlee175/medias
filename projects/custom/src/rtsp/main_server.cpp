@@ -102,7 +102,8 @@ public:
     void onOpen(ExchangerDeviceSource *source) override {
         LOGW("onOpen\n");
         queue = new SyncQueue(500);
-        if (!(stream = create_x264_module(width, height, -1, nullptr, nullptr, on_encoded_frame))) {
+        if (!(stream = create_x264_module(width, height, -1, nullptr, nullptr, "zerolatency",
+                                          nullptr, on_encoded_frame))) {
             LOGW("create_x264_module failed!\n");
         }
         pthread_create(&pthread, nullptr, do_x264_encode, this);
@@ -223,6 +224,7 @@ static void video_server_start() {
 
     ExchangerDeviceSource::dataDelegate = new MyDataDelegate();
     ExchangerH264VideoServerMediaSubsession::preferBitrate = 100; // kbps
+    ExchangerH264VideoServerMediaSubsession::preferFramerate = 24.0;
 
     ServerMediaSession *sms = ServerMediaSession::createNew(*environment, "testH264", "testH264");
     sms->addSubsession(ExchangerH264VideoServerMediaSubsession::createNew(*environment, False));

@@ -4,29 +4,20 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_BUILD_TYPE Debug)
 
+add_definitions(-DOutPacketBufferMaxSize=240000)
 add_definitions(-DALLOW_SERVER_PORT_REUSE)
 
 include_directories(
         x264/include
         ffmpeg/include
         opencv/include
-        live555/include
-        live555/include/BasicUsageEnvironment
-        live555/include/groupsock
-        live555/include/liveMedia
-        live555/include/UsageEnvironment)
+        live555/include)
 
 link_directories(
         x264/lib
         ffmpeg/lib
         opencv/lib
         live555/lib)
-
-set(live555_libs
-        UsageEnvironment
-        BasicUsageEnvironment
-        groupsock
-        liveMedia)
 
 set(ffmpeg_libs
         avformat
@@ -37,11 +28,12 @@ set(ffmpeg_libs
         avfilter
         swresample)
 
+set(opencv_lib_version 3.3.0)
 set(opencv_libs
-        opencv_core
-        opencv_highgui
-        opencv_imgcodecs
-        opencv_imgproc)
+        opencv_core.${opencv_lib_version}
+        opencv_highgui.${opencv_lib_version}
+        opencv_imgcodecs.${opencv_lib_version}
+        opencv_imgproc.${opencv_lib_version})
 
 #################### john_collections #######################
 
@@ -63,12 +55,9 @@ target_link_libraries(hello_udp ${opencv_libs})
 
 set(hello_rtsp_code
         src/rtsp/x264_stream.c
-        src/rtsp/rtsp_ffmpeg_client.c
-        src/rtsp/ExchangerDeviceSource.cpp src/rtsp/ExchangerH264VideoServerMediaSubsession.cpp
-        src/rtsp/ExchangerH264VideoServer.hpp src/rtsp/common.h)
+        src/rtsp/rtsp_ffmpeg_client.c)
 
-set(rtsp_depend x264
-        ${live555_libs} ${ffmpeg_libs} ${opencv_libs})
+set(rtsp_depend x264.152 live555 ${ffmpeg_libs} ${opencv_libs})
 
 add_executable(hello_rtsp_server ${hello_rtsp_code} src/rtsp/main_server.cpp)
 add_executable(hello_rtsp_client ${hello_rtsp_code} src/rtsp/main_client.cpp)
