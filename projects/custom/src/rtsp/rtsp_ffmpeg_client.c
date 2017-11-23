@@ -25,6 +25,8 @@
 #include "common.h"
 #include "rtsp_ffmpeg_client.h"
 
+#define ERROR_BUFFER_SIZE 512
+
 struct RtspClient {
     FrameCallback frame_callback;
     enum AVPixelFormat pixel_format;
@@ -67,8 +69,12 @@ RtspClient *open_rtsp(const char *rtsp_url, enum AVPixelFormat pixel_format, Fra
     av_dict_set(&options, "max_delay", "1000000", 0); /* libavformat/options_table.h */
     av_dict_set(&options, "packetsize", "10240", 0); /* libavformat/options_table.h */
     av_dict_set(&options, "rtbufsize", "11059200", 0); /* libavformat/options_table.h */
-    if (avformat_open_input(&client->format_context, rtsp_url, NULL, &options)) {
-        LOGW("avformat_open_input failed!\n");
+
+    int result_code;
+    if ((result_code = avformat_open_input(&client->format_context, rtsp_url, NULL, &options))) {
+        char error_buffer[ERROR_BUFFER_SIZE];
+        av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
+        LOGW("avformat_open_input failed with %s!\n", error_buffer);
         return NULL;
     }
 
@@ -185,7 +191,9 @@ void loop_read_rtsp_frame(RtspClient *client) {
 #endif /* BACKUP_STREAM */
 #ifndef ONLY_BACKUP
             if ((result_code = avcodec_send_packet(client->codec_context, packet))) {
-                LOGW("avcodec_send_packet failed with code %d!\n", result_code);
+                char error_buffer[ERROR_BUFFER_SIZE];
+                av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
+                LOGW("avcodec_send_packet failed with %s!\n", error_buffer);
                 goto end;
             }
 
@@ -200,7 +208,9 @@ void loop_read_rtsp_frame(RtspClient *client) {
                 if ((result_code = sws_scale(client->sws_context, (const uint8_t *const *)frame_decoded->data,
                               frame_decoded->linesize, 0, client->codec_context->height,
                               frame_result->data, frame_result->linesize)) < 0) {
-                    LOGW("sws_scale failed with code %d!\n", result_code);
+                    char error_buffer[ERROR_BUFFER_SIZE];
+                    av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
+                    LOGW("sws_scale failed with %s!\n", error_buffer);
                     goto end;
                 }
 
@@ -211,12 +221,16 @@ void loop_read_rtsp_frame(RtspClient *client) {
                                            (int64_t) (pts * 1000));
                 }
             }
-            LOGW("avcodec_receive_frame result_code=%d\n", result_code);
+            char error_buffer[ERROR_BUFFER_SIZE];
+            av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
+            LOGW("avcodec_receive_frame result with %s\n", error_buffer);
 #endif /* ONLY_BACKUP */
         }
         av_packet_unref(packet);
     }
-    LOGW("av_read_frame result_code=%d\n", result_code);
+    char error_buffer[ERROR_BUFFER_SIZE];
+    av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
+    LOGW("av_read_frame result with %s\n", error_buffer);
 
     end:
     av_free(buffer);
