@@ -22,22 +22,26 @@
 #include <iostream>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <john_synchronized_queue.h>
+
+static JohnSynchronizedQueue *queue;
 
 static void on_frame_rtsp(uint8_t *data[8], int line_size[8],
                           uint32_t width, uint32_t height, int64_t pts_millis) {
-    cv::Mat image(height, width, CV_8UC3, data[0]);
-    cv::imshow("Image Window", image);
-    cv::waitKey(1);
+    cv::Mat *image = new cv::Mat(height, width, CV_8UC3, data[0]);
+    cv::Mat *old = nullptr;
+    john_synchronized_queue_enqueue(queue, image, reinterpret_cast<void **>(&old), -1);
+    delete old;
 }
 
-static void test_rtsp(const char *url) {
-    cv::namedWindow("Image Window", cv::WINDOW_AUTOSIZE);
-
+static void *test_rtsp(void *data) {
+    const char *url = static_cast<const char *>(data);
     RtspClient *client = open_rtsp(url, AV_PIX_FMT_BGR24, on_frame_rtsp);
     if (client) {
         loop_read_rtsp_frame(client);
         close_rtsp(client);
     }
+    return nullptr;
 }
 
 int main(int argc, char **argv) {
@@ -45,6 +49,26 @@ int main(int argc, char **argv) {
         std::cout << "Need a argument that indicate rtsp URL" << std::endl;
         return 0;
     }
-    test_rtsp(argv[1]);
-    return 0;
+
+    queue = john_synchronized_queue_create(40, true, nullptr);
+    cv::namedWindow("Image Window", cv::WINDOW_AUTOSIZE);
+
+    pthread_t rtsp_thread;
+    pthread_create(&rtsp_thread, nullptr, test_rtsp, argv[1]);
+
+    while (true) {
+        cv::Mat *image = (cv::Mat *)john_synchronized_queue_dequeue(queue, 5000L);
+        if (image) {
+            cv::imshow("Image Window", *image);
+            delete image;
+        }
+        if (cv::waitKey(1) == 27) {
+            break;
+        }
+    }
+
+    cv::destroyAllWindows();
+    john_synchronized_queue_destroy(queue);
+
+    exit(0);
 }

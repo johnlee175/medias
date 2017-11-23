@@ -22,8 +22,10 @@
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
+#include <pthread.h>
 #include "common.h"
 #include "rtsp_ffmpeg_client.h"
+#include "john_synchronized_queue.h"
 
 #define ERROR_BUFFER_SIZE 512
 
@@ -35,6 +37,9 @@ struct RtspClient {
     AVCodecContext *codec_context;
     AVCodec *codec;
     struct SwsContext *sws_context;
+    JohnSynchronizedQueue *video_packet_queue;
+    pthread_t decode_thread;
+    bool stop_decode;
 };
 
 RtspClient *open_rtsp(const char *rtsp_url, enum AVPixelFormat pixel_format, FrameCallback frame_callback) {
@@ -64,7 +69,7 @@ RtspClient *open_rtsp(const char *rtsp_url, enum AVPixelFormat pixel_format, Fra
     av_dict_set(&options, "pkt_size", "10240", 0); /* libavformat/udp.c */
     av_dict_set(&options, "fifo_size", "655350", 0); /* libavformat/udp.c */
     av_dict_set(&options, "reorder_queue_size", "2000", 0); /* libavformat/rtsp.c */
-    av_dict_set(&options, "stimeout", "5000000", 0); /* libavformat/rtsp.c */
+    av_dict_set(&options, "stimeout", "15000000", 0); /* libavformat/rtsp.c */
     av_dict_set(&options, "rtsp_transport", "tcp", 0); /* libavformat/rtsp.c */
     av_dict_set(&options, "max_delay", "1000000", 0); /* libavformat/options_table.h */
     av_dict_set(&options, "packetsize", "10240", 0); /* libavformat/options_table.h */
@@ -128,6 +133,117 @@ RtspClient *open_rtsp(const char *rtsp_url, enum AVPixelFormat pixel_format, Fra
     return client;
 }
 
+void *decode_rtsp_frame(void *data) {
+    LOGW("decode_rtsp_frame!\n");
+    RtspClient *client = (RtspClient *) data;
+    if (!client) {
+        LOGW("client == NULL!\n");
+        return NULL;
+    }
+
+    AVFrame *frame_decoded = av_frame_alloc();
+    if (!frame_decoded) {
+        LOGW("av_frame_alloc failed!\n");
+        return NULL;
+    }
+
+    int result_code;
+    bool error_happened;
+    while (!client->stop_decode) {
+        error_happened = false;
+        AVPacket *packet = (AVPacket *) john_synchronized_queue_dequeue(client->video_packet_queue, 1000);
+        if (!packet) {
+            continue;
+        }
+
+        int buffer_size = av_image_get_buffer_size(client->pixel_format, client->codec_context->width,
+                                                   client->codec_context->height, 1);
+        if (buffer_size <= 0) {
+            LOGW("av_image_get_buffer_size failed!\n");
+            error_happened = true;
+            goto end_packet;
+        }
+        uint8_t *buffer = (uint8_t *)av_malloc((size_t) buffer_size);
+        if (!buffer) {
+            LOGW("av_malloc failed!\n");
+            error_happened = true;
+            goto end_packet;
+        }
+
+        AVFrame *frame_result = av_frame_alloc();
+        if (!frame_result) {
+            LOGW("av_frame_alloc failed!\n");
+            error_happened = true;
+            goto end_buffer;
+        }
+        frame_result->format = client->pixel_format;
+        frame_result->width = client->codec_context->width;
+        frame_result->height = client->codec_context->height;
+
+        if (av_image_fill_arrays(frame_result->data, frame_result->linesize, buffer, client->pixel_format,
+                                 client->codec_context->width, client->codec_context->height, 1) < 0) {
+            LOGW("av_image_fill_arrays failed!\n");
+            error_happened = true;
+            goto end_frame;
+        }
+
+        if ((result_code = avcodec_send_packet(client->codec_context, packet))) {
+            char error_buffer[ERROR_BUFFER_SIZE];
+            av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
+            LOGW("avcodec_send_packet failed with %s!\n", error_buffer);
+            goto end_frame;
+        }
+
+        double_t pts;
+        while ((result_code = avcodec_receive_frame(client->codec_context, frame_decoded)) >= 0) {
+            if ((pts = av_frame_get_best_effort_timestamp(frame_decoded)) == AV_NOPTS_VALUE) {
+                pts = 0;
+            }
+            pts *= av_q2d(client->format_context->streams[client->video_stream_index]->time_base);
+
+            if ((result_code = sws_scale(client->sws_context, (const uint8_t *const *)frame_decoded->data,
+                                         frame_decoded->linesize, 0, client->codec_context->height,
+                                         frame_result->data, frame_result->linesize)) < 0) {
+                char error_buffer[ERROR_BUFFER_SIZE];
+                av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
+                LOGW("sws_scale failed with %s!\n", error_buffer);
+                goto end_frame;
+            }
+
+            if (client->frame_callback) {
+                client->frame_callback(frame_result->data, frame_result->linesize,
+                                       (uint32_t) client->codec_context->width,
+                                       (uint32_t) client->codec_context->height,
+                                       (int64_t) (pts * 1000));
+            }
+        }
+        if (result_code != -EAGAIN) {
+            char error_buffer[ERROR_BUFFER_SIZE];
+            av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
+            LOGW("avcodec_receive_frame result with %s\n", error_buffer);
+        }
+        goto end_frame;
+
+        end_frame:
+        av_frame_free(&frame_result);
+        goto end_buffer;
+
+        end_buffer:
+        av_free(buffer);
+        goto end_packet;
+
+        end_packet:
+        av_packet_unref(packet);
+        av_packet_free(&packet);
+        if (error_happened) {
+            break;
+        }
+    }
+
+    av_frame_free(&frame_decoded);
+    return NULL;
+}
+
 void loop_read_rtsp_frame(RtspClient *client) {
     LOGW("loop_read_rtsp_frame!\n");
     if (!client) {
@@ -135,49 +251,32 @@ void loop_read_rtsp_frame(RtspClient *client) {
         return;
     }
 
-    AVFrame *frame_decoded = av_frame_alloc();
-    if (!frame_decoded) {
-        LOGW("av_frame_alloc failed!\n");
-        return;
-    }
-    AVFrame *frame_result = av_frame_alloc();
-    if (!frame_result) {
-        LOGW("av_frame_alloc failed!\n");
+    if (pthread_create(&client->decode_thread, NULL, decode_rtsp_frame, client)) {
+        LOGW("pthread_create failed!\n");
         return;
     }
 
-    frame_result->format = client->pixel_format;
-    frame_result->width = client->codec_context->width;
-    frame_result->height = client->codec_context->height;
-    int buffer_size = av_image_get_buffer_size(client->pixel_format, client->codec_context->width,
-                                               client->codec_context->height, 1);
-    if (buffer_size <= 0) {
-        LOGW("av_image_get_buffer_size failed!\n");
-        return;
-    }
-    uint8_t *buffer = (uint8_t *)av_malloc((size_t) buffer_size);
-    if (!buffer) {
-        LOGW("av_malloc failed!\n");
-        return;
-    }
-    if (av_image_fill_arrays(frame_result->data, frame_result->linesize, buffer, client->pixel_format,
-                             client->codec_context->width, client->codec_context->height, 1) < 0) {
-        LOGW("av_image_fill_arrays failed!\n");
-        return;
-    }
+    client->video_packet_queue = john_synchronized_queue_create(400, true, NULL);
 
-    AVPacket *packet = av_packet_alloc();
-    if (!packet) {
-        LOGW("av_packet_alloc failed!\n");
-        return;
-    }
-    if (av_new_packet(packet, client->codec_context->width * client->codec_context->height)) {
-        LOGW("av_new_packet failed!\n");
-        return;
-    }
+    while(true) {
+        AVPacket *packet = av_packet_alloc();
+        if (!packet) {
+            LOGW("av_packet_alloc failed!\n");
+            break;
+        }
+        if (av_new_packet(packet, client->codec_context->width * client->codec_context->height)) {
+            LOGW("av_new_packet failed!\n");
+            break;
+        }
 
-    int result_code;
-    while ((result_code = av_read_frame(client->format_context, packet)) >= 0) {
+        int result_code;
+        if ((result_code = av_read_frame(client->format_context, packet)) < 0) {
+            char error_buffer[ERROR_BUFFER_SIZE];
+            av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
+            LOGW("av_read_frame result with %s\n", error_buffer);
+            break;
+        }
+
         if (packet->stream_index == client->video_stream_index) {
 #ifdef BACKUP_STREAM
             static FILE *bak;
@@ -190,53 +289,25 @@ void loop_read_rtsp_frame(RtspClient *client) {
             }
 #endif /* BACKUP_STREAM */
 #ifndef ONLY_BACKUP
-            if ((result_code = avcodec_send_packet(client->codec_context, packet))) {
-                char error_buffer[ERROR_BUFFER_SIZE];
-                av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
-                LOGW("avcodec_send_packet failed with %s!\n", error_buffer);
-                goto end;
+            AVPacket *old_packet = NULL;
+            if (!john_synchronized_queue_enqueue(client->video_packet_queue, packet,
+                                                 (void **) &old_packet, -1)) {
+                LOGW("john_synchronized_queue_enqueue failed!\n");
+                break;
             }
 
-            double_t pts;
-
-            while ((result_code = avcodec_receive_frame(client->codec_context, frame_decoded)) >= 0) {
-                if ((pts = av_frame_get_best_effort_timestamp(frame_decoded)) == AV_NOPTS_VALUE) {
-                    pts = 0;
-                }
-                pts *= av_q2d(client->format_context->streams[client->video_stream_index]->time_base);
-
-                if ((result_code = sws_scale(client->sws_context, (const uint8_t *const *)frame_decoded->data,
-                              frame_decoded->linesize, 0, client->codec_context->height,
-                              frame_result->data, frame_result->linesize)) < 0) {
-                    char error_buffer[ERROR_BUFFER_SIZE];
-                    av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
-                    LOGW("sws_scale failed with %s!\n", error_buffer);
-                    goto end;
-                }
-
-                if (client->frame_callback) {
-                    client->frame_callback(frame_result->data, frame_result->linesize,
-                                           (uint32_t) client->codec_context->width,
-                                           (uint32_t) client->codec_context->height,
-                                           (int64_t) (pts * 1000));
-                }
+            if (old_packet) {
+                av_packet_unref(old_packet);
+                av_packet_free(&old_packet);
             }
-            char error_buffer[ERROR_BUFFER_SIZE];
-            av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
-            LOGW("avcodec_receive_frame result with %s\n", error_buffer);
 #endif /* ONLY_BACKUP */
         }
-        av_packet_unref(packet);
     }
-    char error_buffer[ERROR_BUFFER_SIZE];
-    av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
-    LOGW("av_read_frame result with %s\n", error_buffer);
 
     end:
-    av_free(buffer);
-    av_frame_free(&frame_decoded);
-    av_frame_free(&frame_result);
-    av_packet_free(&packet);
+    client->stop_decode = true;
+    pthread_join(client->decode_thread, NULL);
+    john_synchronized_queue_destroy(client->video_packet_queue);
 }
 
 void close_rtsp(RtspClient *client) {

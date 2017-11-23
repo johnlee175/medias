@@ -8,6 +8,7 @@ add_definitions(-DOutPacketBufferMaxSize=240000)
 add_definitions(-DALLOW_SERVER_PORT_REUSE)
 
 include_directories(
+        src/john_collections
         x264/include
         ffmpeg/include
         opencv/include
@@ -57,7 +58,7 @@ set(hello_rtsp_code
         src/rtsp/x264_stream.c
         src/rtsp/rtsp_ffmpeg_client.c)
 
-set(rtsp_depend x264.152 live555 ${ffmpeg_libs} ${opencv_libs})
+set(rtsp_depend john_collections x264.152 live555 ${ffmpeg_libs} ${opencv_libs})
 
 add_executable(hello_rtsp_server ${hello_rtsp_code} src/rtsp/main_server.cpp)
 add_executable(hello_rtsp_client ${hello_rtsp_code} src/rtsp/main_client.cpp)

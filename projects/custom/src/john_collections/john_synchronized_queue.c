@@ -66,7 +66,8 @@ void john_synchronized_queue_destroy(JohnSynchronizedQueue *synchronized_queue) 
     }
 }
 
-bool john_synchronized_queue_enqueue(JohnSynchronizedQueue *synchronized_queue, void *data, int32_t timeout_millis) {
+bool john_synchronized_queue_enqueue(JohnSynchronizedQueue *synchronized_queue, void *data,
+                                     void **oldest, int32_t timeout_millis) {
     bool result = false;
     if (!synchronized_queue || !data) {
         return result;
@@ -102,7 +103,10 @@ bool john_synchronized_queue_enqueue(JohnSynchronizedQueue *synchronized_queue, 
     if (!synchronized_queue->replace_oldest) {
         goto fail;
     } else {
-        john_queue_dequeue(synchronized_queue->queue);
+        void *discard_object = john_queue_dequeue(synchronized_queue->queue);
+        if (!oldest) {
+            *oldest = discard_object;
+        }
         pthread_cond_signal(&synchronized_queue->full_condition);
         if (!john_queue_is_full(synchronized_queue->queue)) {
             goto success;

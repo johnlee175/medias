@@ -94,16 +94,19 @@ void *john_sync_ring_buffer_read(JohnSyncRingBuffer *ring_buffer, int32_t timeou
     }
 }
 
-void john_sync_ring_buffer_write(JohnSyncRingBuffer *ring_buffer, void *data) {
-    if (ring_buffer && data) {
+void *john_sync_ring_buffer_write(JohnSyncRingBuffer *ring_buffer, void *data) {
+    void *result = NULL;
+    if (!ring_buffer) {
+        return result;
+    }
+    result = ring_buffer->return_on_empty;
+    if (data) {
         pthread_mutex_lock(&ring_buffer->lock);
-        void *older = john_ring_buffer_write(ring_buffer->ring_buffer, data);
-        if (older) {
-            free(older);
-        }
+        result = john_ring_buffer_write(ring_buffer->ring_buffer, data);
         pthread_cond_signal(&ring_buffer->condition);
         pthread_mutex_unlock(&ring_buffer->lock);
     }
+    return result;
 }
 
 void john_sync_ring_buffer_clear(JohnSyncRingBuffer *ring_buffer) {

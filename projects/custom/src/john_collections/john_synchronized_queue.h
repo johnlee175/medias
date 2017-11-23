@@ -33,7 +33,8 @@ typedef struct JohnSynchronizedQueue JohnSynchronizedQueue;
 JohnSynchronizedQueue *john_synchronized_queue_create(uint32_t capacity,
                                               bool replace_oldest, void *return_on_empty);
 void john_synchronized_queue_destroy(JohnSynchronizedQueue *synchronized_queue);
-bool john_synchronized_queue_enqueue(JohnSynchronizedQueue *synchronized_queue, void *data, int32_t timeout_millis);
+bool john_synchronized_queue_enqueue(JohnSynchronizedQueue *synchronized_queue, void *data,
+                                      void **oldest, int32_t timeout_millis);
 void *john_synchronized_queue_dequeue(JohnSynchronizedQueue *synchronized_queue, int32_t timeout_millis);
 void *john_synchronized_queue_head(JohnSynchronizedQueue *synchronized_queue);
 void *john_synchronized_queue_tail(JohnSynchronizedQueue *synchronized_queue);

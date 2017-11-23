@@ -33,7 +33,7 @@ typedef struct JohnSyncRingBuffer JohnSyncRingBuffer;
 JohnSyncRingBuffer *john_sync_ring_buffer_create(uint32_t capacity, void *return_on_empty);
 void john_sync_ring_buffer_destroy(JohnSyncRingBuffer *ring_buffer);
 void *john_sync_ring_buffer_read(JohnSyncRingBuffer *ring_buffer, int32_t timeout_millis);
-void john_sync_ring_buffer_write(JohnSyncRingBuffer *ring_buffer, void *data);
+void *john_sync_ring_buffer_write(JohnSyncRingBuffer *ring_buffer, void *data);
 void john_sync_ring_buffer_clear(JohnSyncRingBuffer *ring_buffer);
 
 #ifdef __cplusplus
