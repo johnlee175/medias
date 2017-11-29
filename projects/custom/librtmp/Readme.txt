@@ -1,3 +1,4 @@
+注: 这里rtmp库因简化未选用https://github.com/ossrs/srs-librtmp
 通常情况下我们只会用rtmp协议测试直播流，很少直接测试rtmps等需要加密的协议，为了加快开发速度可以简单的编译librtmp不用依赖openssl和zlib。
 笔者使用的linux环境编译，windows下的和这个差不多已有其他开发者记录了编译过程。
  1、首先修改rtmp_sys.h文件。

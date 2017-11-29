@@ -16,22 +16,34 @@
  */
 /**
  * @author John Kenrinus Lee
- * @version 2017-11-10
+ * @version 2017-12-10
  */
-#ifndef __COMMON_H__
-#define __COMMON_H__
+#ifndef TRACE_MALLOC_FREE_H
+#define TRACE_MALLOC_FREE_H
 
-#if defined(ANDROID) || defined(__ANDROID__)
-
-#include <android/log.h>
-#define LOGW(...) ((void)__android_log_print(ANDROID_LOG_ERROR, "System.err", __VA_ARGS__))
-
-#else
-
-#include <stdio.h>
-#define LOGW(...)  ((void)fprintf(stderr, __VA_ARGS__))
-
+#ifdef __cplusplus
+extern "C" {
 #endif
 
+void trace_malloc_free_create();
+void trace_malloc_free_destroy();
 
-#endif /* __COMMON_H__ */
+void *__wrap_malloc(size_t size, const char *file, uint32_t line);
+void __wrap_free(void *ptr, const char *file, uint32_t line);
+
+#define TRACE_MALLOC
+#define TRACE_FREE
+
+#ifdef TRACE_MALLOC
+#define malloc(size) __wrap_malloc(size, __FILE__, __LINE__)
+#endif
+
+#ifdef TRACE_FREE
+#define free(ptr) __wrap_free(ptr, __FILE__, __LINE__)
+#endif
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* TRACE_MALLOC_FREE_H */

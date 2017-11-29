@@ -304,7 +304,6 @@ void loop_read_rtsp_frame(RtspClient *client) {
         }
     }
 
-    end:
     client->stop_decode = true;
     pthread_join(client->decode_thread, NULL);
     john_synchronized_queue_destroy(client->video_packet_queue);
