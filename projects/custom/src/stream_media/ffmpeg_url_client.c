@@ -24,12 +24,12 @@
 #include <libswscale/swscale.h>
 #include <pthread.h>
 #include "common.h"
-#include "rtsp_ffmpeg_client.h"
+#include "ffmpeg_url_client.h"
 #include "john_synchronized_queue.h"
 
 #define ERROR_BUFFER_SIZE 512
 
-struct RtspClient {
+struct FFmpegClient {
     FrameCallback frame_callback;
     enum AVPixelFormat pixel_format;
     AVFormatContext *format_context;
@@ -42,19 +42,19 @@ struct RtspClient {
     bool stop_decode;
 };
 
-RtspClient *open_rtsp(const char *rtsp_url, enum AVPixelFormat pixel_format, FrameCallback frame_callback) {
-    LOGW("open_rtsp!\n");
-    if (!rtsp_url) {
-        LOGW("rtsp_url == NULL!\n");
+FFmpegClient *open_media(const char *url, enum AVPixelFormat pixel_format, FrameCallback frame_callback) {
+    LOGW("open_media!\n");
+    if (!url) {
+        LOGW("url == NULL!\n");
         return NULL;
     }
 
-    RtspClient *client = (RtspClient *) malloc(sizeof(RtspClient));
+    FFmpegClient *client = (FFmpegClient *) malloc(sizeof(FFmpegClient));
     if (!client) {
-        LOGW("malloc RtspClient failed!\n");
+        LOGW("malloc FFmpegClient failed!\n");
         return NULL;
     }
-    memset(client, 0, sizeof(RtspClient));
+    memset(client, 0, sizeof(FFmpegClient));
 
     av_register_all();
     avcodec_register_all();
@@ -68,15 +68,18 @@ RtspClient *open_rtsp(const char *rtsp_url, enum AVPixelFormat pixel_format, Fra
     av_dict_set(&options, "buffer_size", "3276800", 0); /* libavformat/udp.c */
     av_dict_set(&options, "pkt_size", "10240", 0); /* libavformat/udp.c */
     av_dict_set(&options, "fifo_size", "655350", 0); /* libavformat/udp.c */
+    av_dict_set(&options, "send_buffer_size", "1638400", 0); /* libavformat/tcp.c */
+    av_dict_set(&options, "recv_buffer_size", "1638400", 0); /* libavformat/tcp.c */
     av_dict_set(&options, "reorder_queue_size", "2000", 0); /* libavformat/rtsp.c */
     av_dict_set(&options, "stimeout", "15000000", 0); /* libavformat/rtsp.c */
     av_dict_set(&options, "rtsp_transport", "tcp", 0); /* libavformat/rtsp.c */
+    av_dict_set(&options, "rtmp_buffer", "10000", 0); /* libavformat/rtmpproto.c */
     av_dict_set(&options, "max_delay", "1000000", 0); /* libavformat/options_table.h */
     av_dict_set(&options, "packetsize", "10240", 0); /* libavformat/options_table.h */
     av_dict_set(&options, "rtbufsize", "11059200", 0); /* libavformat/options_table.h */
 
     int result_code;
-    if ((result_code = avformat_open_input(&client->format_context, rtsp_url, NULL, &options))) {
+    if ((result_code = avformat_open_input(&client->format_context, url, NULL, &options))) {
         char error_buffer[ERROR_BUFFER_SIZE];
         av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
         LOGW("avformat_open_input failed with %s!\n", error_buffer);
@@ -133,9 +136,9 @@ RtspClient *open_rtsp(const char *rtsp_url, enum AVPixelFormat pixel_format, Fra
     return client;
 }
 
-void *decode_rtsp_frame(void *data) {
-    LOGW("decode_rtsp_frame!\n");
-    RtspClient *client = (RtspClient *) data;
+void *decode_stream_frame(void *data) {
+    LOGW("decode_stream_frame!\n");
+    FFmpegClient *client = (FFmpegClient *) data;
     if (!client) {
         LOGW("client == NULL!\n");
         return NULL;
@@ -244,14 +247,14 @@ void *decode_rtsp_frame(void *data) {
     return NULL;
 }
 
-void loop_read_rtsp_frame(RtspClient *client) {
-    LOGW("loop_read_rtsp_frame!\n");
+void loop_read_frame(FFmpegClient *client) {
+    LOGW("loop_read_frame!\n");
     if (!client) {
         LOGW("client == NULL!\n");
         return;
     }
 
-    if (pthread_create(&client->decode_thread, NULL, decode_rtsp_frame, client)) {
+    if (pthread_create(&client->decode_thread, NULL, decode_stream_frame, client)) {
         LOGW("pthread_create failed!\n");
         return;
     }
@@ -309,8 +312,8 @@ void loop_read_rtsp_frame(RtspClient *client) {
     john_synchronized_queue_destroy(client->video_packet_queue);
 }
 
-void close_rtsp(RtspClient *client) {
-    LOGW("close_rtsp!\n");
+void close_media(FFmpegClient *client) {
+    LOGW("close_media!\n");
     if (client) {
         sws_freeContext(client->sws_context);
         avcodec_close(client->codec_context);
@@ -324,7 +327,7 @@ void close_rtsp(RtspClient *client) {
 /* ====================== testing ====================== */
 
 /*
-#include "rtsp_ffmpeg_client.h"
+#include "ffmpeg_url_client.h"
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
@@ -345,11 +348,11 @@ static void on_frame_mp4(uint8_t *data[8], int line_size[8],
 static void test_mp4() {
     cv::namedWindow("Image Window", cv::WINDOW_AUTOSIZE);
 
-    RtspClient *client = open_rtsp("data/cuc_ieschool.mp4",
+    FFmpegClient *client = open_media("data/cuc_ieschool.mp4",
                                    AV_PIX_FMT_BGR24, on_frame_mp4);
     if (client) {
-        loop_read_rtsp_frame(client);
-        close_rtsp(client);
+        loop_read_frame(client);
+        close_media(client);
     }
 }
 */

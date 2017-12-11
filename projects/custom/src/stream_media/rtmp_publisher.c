@@ -24,9 +24,9 @@
 #include <librtmp/rtmp.h>
 #include <john_synchronized_queue.h>
 #include "common.h"
-#include "trace_malloc_free.h"
 #include "rtmp_publisher.h"
 #include "sps_decode.h"
+#include "trace_malloc_free.h"
 
 struct RtmpPublisher {
     RTMP *rtmp;
@@ -171,9 +171,11 @@ RtmpPublisher *rtmp_publisher_create(char *rtmp_url, RtmpSourceFunc func) {
 void rtmp_publisher_destroy(RtmpPublisher *publisher) {
     if (publisher) {
         if (publisher->rtmp) {
+            RTMP_DeleteStream(publisher->rtmp);
             RTMP_Close(publisher->rtmp);
             RTMP_Free(publisher->rtmp);
             publisher->rtmp = NULL;
+            LOGW("rtmp destroy ok!\n");
         }
         if (publisher->unit_queue) {
             john_synchronized_queue_destroy(publisher->unit_queue);

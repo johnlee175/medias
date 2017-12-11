@@ -18,8 +18,8 @@
  * @author John Kenrinus Lee
  * @version 2017-11-10
  */
-#ifndef RTSP_FFMPEG_CLIENT_H
-#define RTSP_FFMPEG_CLIENT_H
+#ifndef FFMPEG_URL_CLIENT_H
+#define FFMPEG_URL_CLIENT_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,14 +32,14 @@ extern "C" {
 typedef void (*FrameCallback)(uint8_t *data[8], int line_size[8],
                               uint32_t width, uint32_t height, int64_t pts_millis);
 
-typedef struct RtspClient RtspClient;
+typedef struct FFmpegClient FFmpegClient;
 
-RtspClient * open_rtsp(const char *rtsp_url, enum AVPixelFormat pixel_format, FrameCallback frame_callback);
-void loop_read_rtsp_frame(RtspClient *client);
-void close_rtsp(RtspClient *client);
+FFmpegClient * open_media(const char *url, enum AVPixelFormat pixel_format, FrameCallback frame_callback);
+void loop_read_frame(FFmpegClient *client);
+void close_media(FFmpegClient *client);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* RTSP_FFMPEG_CLIENT_H */
+#endif /* FFMPEG_URL_CLIENT_H */

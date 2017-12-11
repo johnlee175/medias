@@ -18,14 +18,14 @@
  * @author John Kenrinus Lee
  * @version 2017-11-14
  */
+#include <pthread.h>
+#include <queue>
 #include "common.h"
 #include "x264_stream.h"
 #include "ExchangerDeviceSource.hpp"
 #include "ExchangerH264VideoServerMediaSubsession.hpp"
 #include "BasicUsageEnvironment.hh"
 #include "liveMedia.hh"
-#include <pthread.h>
-#include <queue>
 
 static void on_encoded_frame(uint8_t *payload, uint32_t size);
 static void *do_x264_encode(void *client);
@@ -202,7 +202,7 @@ static void on_encoded_frame(uint8_t *payload, uint32_t size) {
 static void *do_x264_encode(void *client) {
     MyDataDelegate *delegate = static_cast<MyDataDelegate *>(client);
     // ffmpeg -i data/cuc_ieschool.mp4 -c:v rawvideo -pix_fmt yuv420p data/cuc_ieschool.yuv
-    const char *yuv_file = "data/cuc_ieschool.yuv";
+    const char *yuv_file = "medias/projects/custom/data/cuc_ieschool.yuv";
     size_t frame_size = 512 * 288 * 3 / 2;
     uint8_t *frame = new uint8_t[frame_size];
     FILE *file = fopen(yuv_file, "r");

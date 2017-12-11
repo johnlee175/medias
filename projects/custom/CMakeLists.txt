@@ -54,20 +54,20 @@ set(hello_udp_code src/udp/udp_trans.h src/udp/udp_trans.c src/udp/main.cpp)
 add_executable(hello_udp ${hello_udp_code})
 target_link_libraries(hello_udp ${opencv_libs})
 
-#################### hello_rtsp #######################
+#################### hello_stream_media #######################
 
-set(hello_rtsp_code
-        src/rtsp/sps_decode.h
-        src/rtsp/x264_stream.c
-        src/rtsp/trace_malloc_free.c
-        src/rtsp/rtmp_publisher.c
-        src/rtsp/rtsp_ffmpeg_client.c)
+set(hello_stream_media
+        src/stream_media/sps_decode.h
+        src/stream_media/x264_stream.c
+        src/stream_media/trace_malloc_free.c
+        src/stream_media/rtmp_publisher.c
+        src/stream_media/ffmpeg_url_client.c)
 
-set(rtsp_depend john_collections x264.152 live555 rtmp ${ffmpeg_libs} ${opencv_libs})
+set(stream_media_depend john_collections x264.152 live555 rtmp ${ffmpeg_libs} ${opencv_libs})
 
-add_executable(hello_rtsp_server ${hello_rtsp_code} src/rtsp/main_server.cpp)
-add_executable(hello_rtsp_client ${hello_rtsp_code} src/rtsp/main_client.cpp)
-add_executable(hello_as_rtmp ${hello_rtsp_code} src/rtsp/main_rtmp.c)
-target_link_libraries(hello_rtsp_server ${rtsp_depend})
-target_link_libraries(hello_rtsp_client ${rtsp_depend})
-target_link_libraries(hello_as_rtmp ${rtsp_depend})
+add_executable(stream_media_client ${hello_stream_media} src/stream_media/main_client.cpp)
+add_executable(hello_rtsp_server ${hello_stream_media} src/stream_media/main_rtsp_server.cpp)
+add_executable(hello_rtmp_publisher ${hello_stream_media} src/stream_media/main_rtmp_publisher.c)
+target_link_libraries(stream_media_client ${stream_media_depend})
+target_link_libraries(hello_rtsp_server ${stream_media_depend})
+target_link_libraries(hello_rtmp_publisher ${stream_media_depend})

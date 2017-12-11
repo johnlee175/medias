@@ -3,10 +3,10 @@
 #include <pthread.h>
 #include <unistd.h>
 #include "common.h"
-#include "trace_malloc_free.h"
 #include "rtmp_publisher.h"
+#include "trace_malloc_free.h"
 
-bool quit = false;
+static bool quit = false;
 
 void *rtmp_source(void *client) {
     LOGW("rtmp_source\n");

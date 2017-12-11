@@ -18,15 +18,16 @@
  * @author John Kenrinus Lee
  * @version 2017-11-14
  */
-#include "rtsp_ffmpeg_client.h"
+#include "ffmpeg_url_client.h"
 #include <iostream>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <john_synchronized_queue.h>
 
 static JohnSynchronizedQueue *queue;
+static bool quit = false;
 
-static void on_frame_rtsp(uint8_t *data[8], int line_size[8],
+static void on_frame(uint8_t *data[8], int line_size[8],
                           uint32_t width, uint32_t height, int64_t pts_millis) {
     cv::Mat *image = new cv::Mat(height, width, CV_8UC3, data[0]);
     cv::Mat *old = nullptr;
@@ -34,29 +35,30 @@ static void on_frame_rtsp(uint8_t *data[8], int line_size[8],
     delete old;
 }
 
-static void *test_rtsp(void *data) {
+static void *test_stream(void *data) {
     const char *url = static_cast<const char *>(data);
-    RtspClient *client = open_rtsp(url, AV_PIX_FMT_BGR24, on_frame_rtsp);
+    FFmpegClient *client = open_media(url, AV_PIX_FMT_BGR24, on_frame);
     if (client) {
-        loop_read_rtsp_frame(client);
-        close_rtsp(client);
+        loop_read_frame(client);
+        close_media(client);
     }
+    quit = true;
     return nullptr;
 }
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        std::cout << "Need a argument that indicate rtsp URL" << std::endl;
+        std::cout << "Need a argument that indicate rtsp/rtmp URL" << std::endl;
         return 0;
     }
 
     queue = john_synchronized_queue_create(40, true, nullptr);
     cv::namedWindow("Image Window", cv::WINDOW_AUTOSIZE);
 
-    pthread_t rtsp_thread;
-    pthread_create(&rtsp_thread, nullptr, test_rtsp, argv[1]);
+    pthread_t stream_thread;
+    pthread_create(&stream_thread, nullptr, test_stream, argv[1]);
 
-    while (true) {
+    while (!quit) {
         cv::Mat *image = (cv::Mat *)john_synchronized_queue_dequeue(queue, 5000L);
         if (image) {
             cv::imshow("Image Window", *image);

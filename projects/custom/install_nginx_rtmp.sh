@@ -53,6 +53,13 @@ make && sudo make install
 #        application live {
 #            live on;
 #
+#            #send NetStream.Play.PublishNotify and NetStream.Play.UnpublishNotify to subscribers.
+#            publish_notify on;
+#
+#            #if enabled, nginx-rtmp sends NetStream.Play.Start and NetStream.Play.Stop to each subscriber
+#            #every time publisher starts or stops publishing.
+#            play_restart on;
+#
 #            # record keyframes;
 #            # record_path /tmp;
 #            # record_max_size 128K;
