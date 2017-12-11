@@ -81,7 +81,7 @@ X264Stream *create_x264_module(int width, int height, int csp,
                                const char *preset, const char *profile, const char *tune,
                                OnParamConfigFunc config_func, OnFrameEncodedFunc encoded_func,
                                void *user_data);
-int append_i420_frame(X264Stream *stream, uint8_t *frame_data);
+int append_yuv_frame(X264Stream *stream, uint8_t *frame_data);
 int encode_x264_frame(X264Stream *stream);
 void destroy_x264_module(X264Stream *stream);
 

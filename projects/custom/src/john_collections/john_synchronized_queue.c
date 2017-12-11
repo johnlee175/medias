@@ -22,7 +22,6 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <memory.h>
-#include <AppleTextureEncoder.h>
 #include "john_queue.h"
 #include "john_synchronized_queue.h"
 

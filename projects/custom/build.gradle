@@ -1,0 +1,49 @@
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:2.3.3'
+    }
+}
+
+allprojects {
+    repositories {
+        jcenter()
+    }
+}
+
+// gradle externalNativeBuildDebug
+apply plugin: 'com.android.library'
+
+android {
+    compileSdkVersion 24
+    buildToolsVersion "25.0.0"
+    defaultConfig {
+        minSdkVersion 14
+        targetSdkVersion 22
+        versionCode 1
+        versionName "1.0"
+        externalNativeBuild {
+            cmake {
+                abiFilters 'armeabi'
+                arguments '-DANDROID_STL=c++_static', '-DANDROID_DEPRECATED_HEADERS=ON',
+                        '-DANDROID_ARM_NEON=TRUE', '-DANDROID_TOOLCHAIN=clang',
+                        '-DANDROID_PIE=ON', '-DANDROID_ARM_MODE=arm'
+            }
+        }
+        ndk {
+            abiFilters 'armeabi'
+        }
+    }
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+        }
+    }
+}

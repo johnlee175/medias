@@ -134,7 +134,7 @@ X264Stream *create_x264_module(int width, int height, int csp,
     return stream;
 }
 
-int append_i420_frame(X264Stream *stream, uint8_t *frame_data) {
+int append_yuv_frame(X264Stream *stream, uint8_t *frame_data) {
     int luma_size = stream->width * stream->height;
     if (stream->format == X264_CSP_I420 || stream->format == X264_CSP_YV12) {
         int chroma_size = luma_size / 4;
@@ -220,8 +220,8 @@ static int test_x264() {
 
     FILE *file = fopen(yuv_file, "r");
     while (fread(frame, 1, frame_size, file) == frame_size) {
-        if (append_i420_frame(stream, frame) < 0) {
-            LOGW("append_i420_frame failed!\n");
+        if (append_yuv_frame(stream, frame) < 0) {
+            LOGW("append_yuv_frame failed!\n");
             goto fail;
         }
     }

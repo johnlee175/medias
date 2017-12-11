@@ -136,8 +136,8 @@ public:
         if (closed) {
             return;
         }
-        if (append_i420_frame(stream, frame) < 0) {
-            LOGW("append_i420_frame failed!\n");
+        if (append_yuv_frame(stream, frame) < 0) {
+            LOGW("append_yuv_frame failed!\n");
         }
     }
 

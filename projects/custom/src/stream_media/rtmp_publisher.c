@@ -22,7 +22,7 @@
 #include <memory.h>
 #include <sys/time.h>
 #include <librtmp/rtmp.h>
-#include <john_synchronized_queue.h>
+#include "john_synchronized_queue.h"
 #include "common.h"
 #include "rtmp_publisher.h"
 #include "sps_decode.h"

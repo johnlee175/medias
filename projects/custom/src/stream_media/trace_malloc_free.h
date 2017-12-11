@@ -31,9 +31,6 @@ void trace_malloc_free_destroy();
 void *__wrap_malloc(size_t size, const char *file, uint32_t line);
 void __wrap_free(void *ptr, const char *file, uint32_t line);
 
-#define TRACE_MALLOC
-#define TRACE_FREE
-
 #ifdef TRACE_MALLOC
 #define malloc(size) __wrap_malloc(size, __FILE__, __LINE__)
 #endif

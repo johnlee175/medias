@@ -79,8 +79,8 @@ static void *rtmp_x264_source(void *client) {
         if (fread(frame, 1, frame_size, file) <= 0) {
             break;
         }
-        if (append_i420_frame(stream, frame) < 0) {
-            LOGW("append_i420_frame failed!\n");
+        if (append_yuv_frame(stream, frame) < 0) {
+            LOGW("append_yuv_frame failed!\n");
             break;
         }
         LOGW("source update...\n");

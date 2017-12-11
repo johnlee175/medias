@@ -68,12 +68,12 @@ FFmpegClient *open_media(const char *url, enum AVPixelFormat pixel_format, Frame
     av_dict_set(&options, "buffer_size", "3276800", 0); /* libavformat/udp.c */
     av_dict_set(&options, "pkt_size", "10240", 0); /* libavformat/udp.c */
     av_dict_set(&options, "fifo_size", "655350", 0); /* libavformat/udp.c */
-    av_dict_set(&options, "send_buffer_size", "1638400", 0); /* libavformat/tcp.c */
-    av_dict_set(&options, "recv_buffer_size", "1638400", 0); /* libavformat/tcp.c */
+    av_dict_set(&options, "send_buffer_size", "16384", 0); /* libavformat/tcp.c small size for small play delay */
+    av_dict_set(&options, "recv_buffer_size", "16384", 0); /* libavformat/tcp.c small size for small play delay */
     av_dict_set(&options, "reorder_queue_size", "2000", 0); /* libavformat/rtsp.c */
     av_dict_set(&options, "stimeout", "15000000", 0); /* libavformat/rtsp.c */
     av_dict_set(&options, "rtsp_transport", "tcp", 0); /* libavformat/rtsp.c */
-    av_dict_set(&options, "rtmp_buffer", "10000", 0); /* libavformat/rtmpproto.c */
+    av_dict_set(&options, "rtmp_buffer", "1000", 0); /* libavformat/rtmpproto.c small size for small play delay */
     av_dict_set(&options, "max_delay", "1000000", 0); /* libavformat/options_table.h */
     av_dict_set(&options, "packetsize", "10240", 0); /* libavformat/options_table.h */
     av_dict_set(&options, "rtbufsize", "11059200", 0); /* libavformat/options_table.h */

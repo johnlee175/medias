@@ -22,7 +22,7 @@
 #include <iostream>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include <john_synchronized_queue.h>
+#include "john_synchronized_queue.h"
 
 static JohnSynchronizedQueue *queue;
 static bool quit = false;

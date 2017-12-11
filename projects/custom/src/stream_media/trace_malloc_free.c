@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
-#include <common.h>
+#include "common.h"
 
 uint64_t alloc_count = 0;
 pthread_mutex_t alloc_count_lock;
