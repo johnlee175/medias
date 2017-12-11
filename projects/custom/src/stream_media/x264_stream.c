@@ -18,12 +18,13 @@
  * @author John Kenrinus Lee
  * @version 2017-11-10
  */
-#include "common.h"
-#include "x264_stream.h"
+#include <stdint.h>
 #include <x264.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
+#include "common.h"
+#include "x264_stream.h"
 
 struct X264Stream {
     int width;
@@ -35,6 +36,7 @@ struct X264Stream {
     x264_nal_t *nal;
     int i_nal;
     OnFrameEncodedFunc func;
+    void *user_data;
 };
 
 void default_param_config(void *x264_param_type) {
@@ -71,7 +73,8 @@ void default_param_config(void *x264_param_type) {
 
 X264Stream *create_x264_module(int width, int height, int csp,
                                const char *preset, const char *profile, const char *tune,
-                               OnParamConfigFunc config_func, OnFrameEncodedFunc encoded_func) {
+                               OnParamConfigFunc config_func, OnFrameEncodedFunc encoded_func,
+                               void *user_data) {
     X264Stream *stream = (X264Stream *) malloc(sizeof(X264Stream));
     if (!stream) {
         LOGW("malloc X264Stream failed!\n");
@@ -79,6 +82,7 @@ X264Stream *create_x264_module(int width, int height, int csp,
     }
     memset(stream, 0, sizeof(X264Stream));
     stream->func = encoded_func;
+    stream->user_data = user_data;
 
     x264_param_t param;
     /* Get default params for preset/tuning */
@@ -152,7 +156,7 @@ int append_i420_frame(X264Stream *stream, uint8_t *frame_data) {
     if (i_frame_size < 0) {
         return -1;
     } else if (i_frame_size) {
-        stream->func(stream->nal->p_payload, (uint32_t) i_frame_size);
+        stream->func(stream->nal->p_payload, (uint32_t) i_frame_size, stream->user_data);
     }
 
     return 0;
@@ -165,7 +169,7 @@ int encode_x264_frame(X264Stream *stream) {
         if (i_frame_size < 0) {
             return -1;
         } else if (i_frame_size) {
-            stream->func(stream->nal->p_payload, (uint32_t) i_frame_size);
+            stream->func(stream->nal->p_payload, (uint32_t) i_frame_size, stream->user_data);
         }
     }
     return 0;
@@ -192,7 +196,7 @@ void destroy_x264_module(X264Stream *stream) {
 
 /* ====================== testing ====================== */
 
-static void on_frame_encoded(uint8_t *payload, uint32_t size) {
+static void on_frame_encoded(uint8_t *payload, uint32_t size, void *user_data) {
     FILE *out = fopen("data/test.264", "a");
     if (!fwrite(payload, size, 1, out)) {
         LOGW("on_frame_encoded process failed!\n");
@@ -206,7 +210,7 @@ static int test_x264() {
     const char *yuv_file = "data/cuc_ieschool.yuv";
     X264Stream *stream = NULL;
     if (!(stream = create_x264_module(width, height, -1, NULL, NULL, "zerolatency",
-                                      NULL, on_frame_encoded))) {
+                                      NULL, on_frame_encoded, NULL))) {
         LOGW("create_x264_module failed!\n");
         return -1;
     }

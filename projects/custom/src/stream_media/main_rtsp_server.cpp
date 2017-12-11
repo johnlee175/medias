@@ -27,7 +27,7 @@
 #include "BasicUsageEnvironment.hh"
 #include "liveMedia.hh"
 
-static void on_encoded_frame(uint8_t *payload, uint32_t size);
+static void on_encoded_frame(uint8_t *payload, uint32_t size, void *user_data);
 static void *do_x264_encode(void *client);
 
 class ByteArray {
@@ -94,7 +94,8 @@ private:
 
 class MyDataDelegate: public ExchangerDataDelegate {
 public:
-    MyDataDelegate(): stream(nullptr), queue(nullptr), closed(false), lastReadData(nullptr) { };
+    MyDataDelegate(): stream(nullptr), queue(nullptr), closed(false),
+                      lastReadData(nullptr), pthread(nullptr) { };
     ~MyDataDelegate() override {
         delete[] lastReadData;
     }
@@ -103,7 +104,7 @@ public:
         LOGW("onOpen\n");
         queue = new SyncQueue(500);
         if (!(stream = create_x264_module(width, height, -1, nullptr, nullptr, "zerolatency",
-                                          nullptr, on_encoded_frame))) {
+                                          nullptr, on_encoded_frame, this))) {
             LOGW("create_x264_module failed!\n");
         }
         pthread_create(&pthread, nullptr, do_x264_encode, this);
@@ -193,7 +194,7 @@ private:
     static const int width = 512, height = 288;
 };
 
-static void on_encoded_frame(uint8_t *payload, uint32_t size) {
+static void on_encoded_frame(uint8_t *payload, uint32_t size, void *user_data) {
     uint8_t *data = new uint8_t[size];
     memcpy(data, payload, size);
     dynamic_cast<MyDataDelegate *>(ExchangerDeviceSource::dataDelegate)->write264Data(data, size);
