@@ -1,0 +1,44 @@
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:2.3.3'
+    }
+}
+
+allprojects {
+    repositories {
+        jcenter()
+    }
+}
+
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 24
+    buildToolsVersion "26.0.1"
+    defaultConfig {
+        applicationId "com.johnsoft.testyuv"
+        minSdkVersion 14
+        targetSdkVersion 22
+        versionCode 1
+        versionName "1.0"
+        externalNativeBuild {
+            cmake {
+                abiFilters 'armeabi'
+                arguments '-DANDROID_DEPRECATED_HEADERS=ON', '-DANDROID_ARM_NEON=TRUE'
+            }
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+        }
+    }
+}
+
+dependencies {
+    compile fileTree(dir: 'libs', include: ['*.jar'])
+    compile 'com.android.support:appcompat-v7:24.2.1'
+}
