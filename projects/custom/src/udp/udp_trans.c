@@ -44,7 +44,7 @@ void udp_trans_init(const char *config) {
         return;
     }
     char buffer[file_length];
-    if (fread(buffer, (size_t)file_length, 1, file) != file_length) {
+    if (fread(buffer, (size_t)file_length, 1, file) != (size_t) file_length) {
         LOGW("read config file content failed\n");
         return;
     }

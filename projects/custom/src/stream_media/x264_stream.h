@@ -27,16 +27,16 @@ extern "C" {
 
 #include <stdint.h>
 
-typedef void (*OnFrameEncodedFunc)(uint8_t *payload, uint32_t size, void *user_data);
-/** x264_param_type can be type cast as x264_param_t. see default_param_config(void *) **/
-typedef void (*OnParamConfigFunc)(void *x264_param_type);
+typedef void (*OnX264FrameEncodedFunc)(uint8_t *payload, uint32_t size, void *user_data);
+/** x264_param_type can be type cast as x264_param_t pointer. see default_param_config_x264(void *) **/
+typedef void (*OnX264ParamConfigFunc)(void *x264_param_type);
 
 typedef struct X264Stream X264Stream;
 
 /**
  * #include <x264.h>
- * void default_param_config(void *x264_param_type) {
- *     x264_param_t *param = x264_param_type;
+ * void default_param_config_x264(void *x264_param_type) {
+ *     x264_param_t *param = (x264_param_t *) x264_param_type;
  *     const int framerate = 25;
  *     const int bitrate = 500; // kbps
  *
@@ -67,21 +67,22 @@ typedef struct X264Stream X264Stream;
  *     param->i_log_level = X264_LOG_DEBUG;
  * }
  */
-void default_param_config(void *x264_param_type);
+void default_param_config_x264(void *x264_param_type);
 
 /**
  * csp, preset, profile, tune see <x264.h>.
- * csp is macro start with X264_CSP_*.
+ * csp is macro start with X264_CSP_*,
+ * default support X264_CSP_I420, X264_CSP_NV12, X264_CSP_YV12, X264_CSP_NV21.
  * preset, profile, tune see x264_preset_names[], x264_profile_names[], x264_tune_names[].
  * if want default value, set csp = -1(default I420),
- * preset = NULL(default "medium"), profile = NULL(default "high"), tune = NULL(default NULL),
- * config_func = NULL(default default_param_config)
+ * preset = NULL(default "medium"), profile = NULL(default "main"), tune = NULL(default "fastdecode"),
+ * config_func = NULL(default default_param_config_x264)
  */
 X264Stream *create_x264_module(int width, int height, int csp,
                                const char *preset, const char *profile, const char *tune,
-                               OnParamConfigFunc config_func, OnFrameEncodedFunc encoded_func,
+                               OnX264ParamConfigFunc config_func, OnX264FrameEncodedFunc encoded_func,
                                void *user_data);
-int append_yuv_frame(X264Stream *stream, uint8_t *frame_data);
+int append_yuv_frame_x264(X264Stream *stream, uint8_t *frame_data);
 int encode_x264_frame(X264Stream *stream);
 void destroy_x264_module(X264Stream *stream);
 

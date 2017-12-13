@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include <queue>
 #include "common.h"
+#include "base_path.h"
 #include "x264_stream.h"
 #include "ExchangerDeviceSource.hpp"
 #include "ExchangerH264VideoServerMediaSubsession.hpp"
@@ -40,7 +41,7 @@ public:
 
 class SyncQueue {
 public:
-    explicit SyncQueue(int capacity):queue(new std::queue<ByteArray *>()), capacity(capacity) {
+    explicit SyncQueue(int capacity):capacity(capacity), queue(new std::queue<ByteArray *>()) {
         pthread_mutex_init(&mutex, nullptr);
         pthread_cond_init(&cond, nullptr);
     }
@@ -55,7 +56,7 @@ public:
         ByteArray *older = nullptr;
         pthread_mutex_lock(&mutex);
         LOGW("queue->size()=%lu\n", queue->size());
-        while (queue->size() >= capacity) {
+        while (queue->size() >= (uint32_t) capacity) {
             older = queue->front();
             queue->pop();
         }
@@ -94,7 +95,7 @@ private:
 
 class MyDataDelegate: public ExchangerDataDelegate {
 public:
-    MyDataDelegate(): stream(nullptr), queue(nullptr), closed(false),
+    MyDataDelegate(): closed(false), stream(nullptr), queue(nullptr),
                       lastReadData(nullptr), pthread(nullptr) { };
     ~MyDataDelegate() override {
         delete[] lastReadData;
@@ -136,7 +137,7 @@ public:
         if (closed) {
             return;
         }
-        if (append_yuv_frame(stream, frame) < 0) {
+        if (append_yuv_frame_x264(stream, frame) < 0) {
             LOGW("append_yuv_frame failed!\n");
         }
     }
@@ -187,10 +188,10 @@ public:
     }
 private:
     bool closed;
-    pthread_t pthread;
     X264Stream *stream;
     SyncQueue *queue;
     uint8_t *lastReadData;
+    pthread_t pthread;
     static const int width = 512, height = 288;
 };
 
@@ -202,8 +203,8 @@ static void on_encoded_frame(uint8_t *payload, uint32_t size, void *user_data) {
 
 static void *do_x264_encode(void *client) {
     MyDataDelegate *delegate = static_cast<MyDataDelegate *>(client);
-    // ffmpeg -i data/cuc_ieschool.mp4 -c:v rawvideo -pix_fmt yuv420p data/cuc_ieschool.yuv
-    const char *yuv_file = "medias/projects/custom/data/cuc_ieschool.yuv";
+    // ffmpeg -i data/test.mp4 -c:v rawvideo -pix_fmt yuv420p data/test_512x288.yuv
+    const char *yuv_file = BASE_PATH"/data/test_512x288.yuv";
     size_t frame_size = 512 * 288 * 3 / 2;
     uint8_t *frame = new uint8_t[frame_size];
     FILE *file = fopen(yuv_file, "r");

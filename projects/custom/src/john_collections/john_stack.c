@@ -52,7 +52,7 @@ void john_stack_destroy(JohnStack *stack) {
 }
 
 bool john_stack_push(JohnStack *stack, void *data) {
-    if (stack && data && stack->pointer < stack->capacity) {
+    if (stack && data && stack->pointer < (int32_t) stack->capacity) {
         stack->array[++stack->pointer] = data;
         return true;
     }
@@ -74,7 +74,7 @@ void *john_stack_peek(JohnStack *stack) {
 }
 
 bool john_stack_is_full(JohnStack *stack) {
-    return stack && stack->pointer == stack->capacity - 1;
+    return stack && stack->pointer == (int32_t) (stack->capacity - 1);
 }
 
 bool john_stack_is_empty(JohnStack *stack) {

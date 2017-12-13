@@ -56,7 +56,21 @@ typedef struct RtmpByteArray {
                     *(body_pointer)++ = (uint8_t) (((d) >> (i * 8)) & 0xFF); \
                 }
 
-#define is_nalu_type(nalu, type) (((nalu)->data[0] & 0x1F) == (type))
+#define is_nalu_h264_type(nalu, type) (((nalu)->data[0] & 0x1F) == (type))
+#define is_nalu_h265_type(nalu, type) ((((nalu)->data[0] & 0x7E) >> 1) == (type))
+#define is_nalu_type(prototol_version, nalu, type) \
+                ((prototol_version) == 265 ? is_nalu_h265_type((nalu), (type)) : is_nalu_h264_type((nalu), (type)))
+#define type_sps(prototol_version) ((prototol_version) == 265 ? 0x21 : 0x07)
+#define type_pps(prototol_version) ((prototol_version) == 265 ? 0x22 : 0x08)
+#define type_idr(prototol_version) ((prototol_version) == 265 ? 0x13 : 0x05)
+#define type_eob(prototol_version) ((prototol_version) == 265 ? 0x25 : 0x0B)
+
+#define decode_sps(prototol_version, buffer, buffer_size, width, height, fps) \
+                ((prototol_version) == 265 ? \
+                    decode_h265_sps((buffer), (buffer_size), (width), (height), (fps)) \
+                    : decode_h264_sps((buffer), (buffer_size), (width), (height), (fps)))
+
+#define h26x_codec_id(prototol_version) ((prototol_version) == 265 ? 265 /* not-defined */ : 7 /* h264 */)
 
 static uint32_t rtmp_publisher_read_source(RtmpPublisher *publisher, uint8_t **buffer, const bool *quit) {
     if (publisher && publisher->buffer_queue && buffer) {
@@ -225,7 +239,7 @@ bool rtmp_publisher_send(RtmpPublisher *publisher, uint8_t *buffer, uint32_t buf
 }
 
 bool rtmp_publisher_send_metadata(RtmpPublisher *publisher, uint32_t width, uint32_t height,
-                                  uint32_t frame_rate) {
+                                  uint32_t frame_rate, int protocol_version) {
     if (!publisher) {
         return false;
     }
@@ -248,7 +262,7 @@ bool rtmp_publisher_send_metadata(RtmpPublisher *publisher, uint32_t width, uint
     put_amf_string("framerate", len, body_pointer);
     put_amf_number((uint64_t) frame_rate, body_pointer);
     put_amf_string("videocodecid", len, body_pointer);
-    put_amf_number((uint64_t) 7 /* h264 */, body_pointer);
+    put_amf_number((uint64_t) h26x_codec_id(protocol_version), body_pointer);
     *(body_pointer)++ = AMF_OBJECT_END;
 
     bool ret = rtmp_publisher_send(publisher, body, (uint32_t) (body_pointer - body),
@@ -462,7 +476,7 @@ bool rtmp_publisher_avc_produce_loop(RtmpPublisher *publisher, const bool *quit)
 #define QUIT_LOOP abort()
 #endif /* QUIT_LOOP */
 
-bool rtmp_publisher_avc_consume_loop(RtmpPublisher *publisher, const bool *quit) {
+bool rtmp_publisher_avc_consume_loop(RtmpPublisher *publisher, const bool *quit, int protocol_version) {
     bool default_quit = false;
     if (!quit) {
         quit = &default_quit;
@@ -482,26 +496,26 @@ bool rtmp_publisher_avc_consume_loop(RtmpPublisher *publisher, const bool *quit)
         nalu = (RtmpByteArray *)john_synchronized_queue_dequeue(publisher->unit_queue, 1000);
         if (nalu) {
             LOGW("unit queue length == %ul\n", --publisher->unit_queue_length);
-            if (is_nalu_type(nalu, 0x07)) {
+            if (is_nalu_type(protocol_version, nalu, type_sps(protocol_version))) {
                 sps = nalu->data;
                 sps_len = nalu->size;
-                if (!decode_h264_sps(nalu->data, nalu->size, &width, &height, &frame_rate)) {
-                    LOGW("decode_h264_sps failed\n");
+                if (!decode_sps(protocol_version, nalu->data, nalu->size, &width, &height, &frame_rate)) {
+                    LOGW("decode_sps failed\n");
                     QUIT_LOOP;
                 } else {
-                    LOGW("decode_h264_sps: width=%d, height=%d, frame rate=%d\n", width, height, frame_rate);
+                    LOGW("decode_sps: width=%d, height=%d, frame rate=%d\n", width, height, frame_rate);
                 }
-            } else if (is_nalu_type(nalu, 0x08)) {
+            } else if (is_nalu_type(protocol_version, nalu, type_pps(protocol_version))) {
                 pps = nalu->data;
                 pps_len = nalu->size;
-            } else if (is_nalu_type(nalu, 0x0b)) {
+            } else if (is_nalu_type(protocol_version, nalu, type_eob(protocol_version))) {
                 LOGW("detected end of stream!\n");
                 break;
             } else {
                 if (!send_meta_header) {
                     if (sps && pps) {
                         send_meta_header = true;
-                        if (!rtmp_publisher_send_metadata(publisher, width, height, frame_rate)) {
+                        if (!rtmp_publisher_send_metadata(publisher, width, height, frame_rate, protocol_version)) {
                             LOGW("metadata send failed\n");
                             QUIT_LOOP;
                         }
@@ -519,8 +533,9 @@ bool rtmp_publisher_avc_consume_loop(RtmpPublisher *publisher, const bool *quit)
                     }
                     pts_millis = 1000 * (end_time.tv_sec - start_time.tv_sec) +
                             ((end_time.tv_usec - start_time.tv_usec) / 1000);
+                    bool is_idr = is_nalu_type(protocol_version, nalu, type_idr(protocol_version));
                     if (!rtmp_publisher_send_avc_nalu(publisher, nalu->data, nalu->size,
-                                                 (uint32_t) pts_millis, is_nalu_type(nalu, 0x05 /* IDR */))) {
+                                                      (uint32_t) pts_millis, is_idr)) {
                         LOGW("avc nalu send failed\n");
                         QUIT_LOOP;
                     }

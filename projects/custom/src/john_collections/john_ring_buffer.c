@@ -61,7 +61,7 @@ void *john_ring_buffer_read(JohnRingBuffer *ring_buffer, void *return_on_empty) 
             return return_on_empty;
         }
         void *data = ring_buffer->array[ring_buffer->read_pointer];
-        if (++ring_buffer->read_pointer >= ring_buffer->capacity) {
+        if (++ring_buffer->read_pointer >= (int32_t) ring_buffer->capacity) {
             --ring_buffer->round;
             ring_buffer->read_pointer = ring_buffer->read_pointer % ring_buffer->capacity;
         }
@@ -74,14 +74,14 @@ void *john_ring_buffer_write(JohnRingBuffer *ring_buffer, void *data) {
     void *result = NULL;
     if (ring_buffer && data) {
         if (ring_buffer->write_pointer == ring_buffer->read_pointer && ring_buffer->round != 0) { /* is full */
-            if (++ring_buffer->read_pointer >= ring_buffer->capacity) { /* ++read_pointer */
+            if (++ring_buffer->read_pointer >= (int32_t) ring_buffer->capacity) { /* ++read_pointer */
                 --ring_buffer->round;
                 ring_buffer->read_pointer = ring_buffer->read_pointer % ring_buffer->capacity;
             }
         }
         result = ring_buffer->array[ring_buffer->write_pointer];
         ring_buffer->array[ring_buffer->write_pointer] = data;
-        if (++ring_buffer->write_pointer >= ring_buffer->capacity) {
+        if (++ring_buffer->write_pointer >= (int32_t) ring_buffer->capacity) {
             ++ring_buffer->round;
             ring_buffer->write_pointer = ring_buffer->write_pointer % ring_buffer->capacity;
         }

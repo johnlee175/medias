@@ -80,7 +80,7 @@ JohnObjectPool *john_object_pool_create(uint32_t max_size, uint32_t pool_size, u
         pthread_mutex_init(&object_pool->lock, NULL);
 
         pthread_mutex_lock(&object_pool->lock);
-        for (int i = 0; i < prepare_size; ++i) {
+        for (uint32_t i = 0; i < prepare_size; ++i) {
             john_stack_push(object_pool->stack,
                             object_pool->create_func(object_pool->user_client_params));
             ++object_pool->alloc_size;

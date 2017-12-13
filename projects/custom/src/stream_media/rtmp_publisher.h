@@ -45,7 +45,8 @@ bool rtmp_publisher_update_source(RtmpPublisher *publisher,
                                   uint8_t *buffer/* 500 in queue */, uint32_t buffer_size);
 
 bool rtmp_publisher_avc_produce_loop(RtmpPublisher *publisher, const bool *quit);
-bool rtmp_publisher_avc_consume_loop(RtmpPublisher *publisher, const bool *quit);
+/** protocol_version = { 264, 265 } */
+bool rtmp_publisher_avc_consume_loop(RtmpPublisher *publisher, const bool *quit, int protocol_version);
 
 #ifdef __cplusplus
 }

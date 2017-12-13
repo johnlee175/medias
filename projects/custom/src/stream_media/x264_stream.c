@@ -35,11 +35,11 @@ struct X264Stream {
     x264_t *h;
     x264_nal_t *nal;
     int i_nal;
-    OnFrameEncodedFunc func;
+    OnX264FrameEncodedFunc func;
     void *user_data;
 };
 
-void default_param_config(void *x264_param_type) {
+void default_param_config_x264(void *x264_param_type) {
     x264_param_t *param = x264_param_type;
     const int framerate = 25;
     const int bitrate = 500; /* kbps */
@@ -73,7 +73,7 @@ void default_param_config(void *x264_param_type) {
 
 X264Stream *create_x264_module(int width, int height, int csp,
                                const char *preset, const char *profile, const char *tune,
-                               OnParamConfigFunc config_func, OnFrameEncodedFunc encoded_func,
+                               OnX264ParamConfigFunc config_func, OnX264FrameEncodedFunc encoded_func,
                                void *user_data) {
     X264Stream *stream = (X264Stream *) malloc(sizeof(X264Stream));
     if (!stream) {
@@ -87,23 +87,24 @@ X264Stream *create_x264_module(int width, int height, int csp,
     x264_param_t param;
     /* Get default params for preset/tuning */
     if (x264_param_default_preset(&param, (preset ? preset : "medium"),
-                                  (tune ? tune : NULL)) < 0) {
+                                  (tune ? tune : "fastdecode")) < 0) {
         LOGW("x264_param_default_preset failed!\n");
         return NULL;
     }
 
     /* Configure non-default params */
-    param.i_csp = stream->format = (csp > 0 ? csp : X264_CSP_I420);
+    stream->format = (csp > 0 ? csp : X264_CSP_I420);
+    param.i_csp = (csp > 0 && csp < X264_CSP_MAX ? csp : X264_CSP_I420);
     param.i_width = stream->width = width;
     param.i_height = stream->height = height;
     if (config_func) {
         config_func(&param);
     } else {
-        default_param_config(&param);
+        default_param_config_x264(&param);
     }
 
     /* Apply profile restrictions. */
-    if (x264_param_apply_profile(&param, (profile ? profile : "high")) < 0) {
+    if (x264_param_apply_profile(&param, (profile ? profile : "main")) < 0) {
         LOGW("x264_param_apply_profile failed!\n");
         return NULL;
     }
@@ -134,7 +135,7 @@ X264Stream *create_x264_module(int width, int height, int csp,
     return stream;
 }
 
-int append_yuv_frame(X264Stream *stream, uint8_t *frame_data) {
+int append_yuv_frame_x264(X264Stream *stream, uint8_t *frame_data) {
     int luma_size = stream->width * stream->height;
     if (stream->format == X264_CSP_I420 || stream->format == X264_CSP_YV12) {
         int chroma_size = luma_size / 4;
@@ -196,8 +197,10 @@ void destroy_x264_module(X264Stream *stream) {
 
 /* ====================== testing ====================== */
 
+#include "base_path.h"
+
 static void on_frame_encoded(uint8_t *payload, uint32_t size, void *user_data) {
-    FILE *out = fopen("data/test.264", "a");
+    FILE *out = fopen(BASE_PATH"/data/test.264", "a");
     if (!fwrite(payload, size, 1, out)) {
         LOGW("on_frame_encoded process failed!\n");
     }
@@ -205,11 +208,11 @@ static void on_frame_encoded(uint8_t *payload, uint32_t size, void *user_data) {
 }
 
 static int test_x264() {
-    const int width = 320, height = 180;
-    // ffmpeg -i data/cuc_ieschool.mp4 -c:v rawvideo -pix_fmt yuv420p data/cuc_ieschool.yuv
-    const char *yuv_file = "data/cuc_ieschool.yuv";
+    const int width = 512, height = 288;
+    // ffmpeg -i data/test.mp4 -c:v rawvideo -pix_fmt yuv420p data/test_512x288.yuv
+    const char *yuv_file = BASE_PATH"/data/test_512x288.yuv";
     X264Stream *stream = NULL;
-    if (!(stream = create_x264_module(width, height, -1, NULL, NULL, "zerolatency",
+    if (!(stream = create_x264_module(width, height, -1, NULL, NULL, NULL /* "zerolatency" */,
                                       NULL, on_frame_encoded, NULL))) {
         LOGW("create_x264_module failed!\n");
         return -1;
@@ -220,7 +223,7 @@ static int test_x264() {
 
     FILE *file = fopen(yuv_file, "r");
     while (fread(frame, 1, frame_size, file) == frame_size) {
-        if (append_yuv_frame(stream, frame) < 0) {
+        if (append_yuv_frame_x264(stream, frame) < 0) {
             LOGW("append_yuv_frame failed!\n");
             goto fail;
         }
@@ -232,10 +235,18 @@ static int test_x264() {
 
     free(frame);
     destroy_x264_module(stream);
+    LOGW("destroy_x264_module normal\n");
     return 0;
 
     fail:
     free(frame);
     destroy_x264_module(stream);
+    LOGW("destroy_x264_module exception\n");
     return -1;
 }
+
+#ifdef TEST_X264
+int main() {
+    test_x264();
+}
+#endif /* TEST_X264 */

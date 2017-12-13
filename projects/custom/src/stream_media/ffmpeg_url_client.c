@@ -328,6 +328,7 @@ void close_media(FFmpegClient *client) {
 
 /*
 #include "ffmpeg_url_client.h"
+#include "base_path.h"
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
@@ -348,7 +349,7 @@ static void on_frame_mp4(uint8_t *data[8], int line_size[8],
 static void test_mp4() {
     cv::namedWindow("Image Window", cv::WINDOW_AUTOSIZE);
 
-    FFmpegClient *client = open_media("data/cuc_ieschool.mp4",
+    FFmpegClient *client = open_media(BASE_PATH"/data/test.mp4",
                                    AV_PIX_FMT_BGR24, on_frame_mp4);
     if (client) {
         loop_read_frame(client);
