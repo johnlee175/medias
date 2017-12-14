@@ -18,12 +18,21 @@
  * @author John Kenrinus Lee
  * @version 2017-11-14
  */
+#define APPLY_AS_X265
+
 #include "common.h"
 #include "ExchangerDeviceSource.hpp"
-#include "ExchangerH264VideoServerMediaSubsession.hpp"
 #include "BasicUsageEnvironment.hh"
 #include "liveMedia.hh"
+
+#ifdef APPLY_AS_X265
+#include <x265.h>
+#include "ExchangerH265VideoServerMediaSubsession.hpp"
+#else /* APPLY_AS_X265 */
 #include <x264.h>
+#include "ExchangerH264VideoServerMediaSubsession.hpp"
+#endif /* APPLY_AS_X265 */
+
 #include <pthread.h>
 #include <queue>
 
@@ -96,7 +105,7 @@ static int kfWidth, kfHeight;
 class MyDataDelegate: public ExchangerDataDelegate {
 public:
     MyDataDelegate(): queue(nullptr), closed(true), lastReadData(nullptr),
-                      iNal(0), nal(nullptr), picIn(nullptr), picOut(nullptr), h(nullptr) {
+                      iNal(0), nal(nullptr), picIn(nullptr), picOut(nullptr), h(nullptr), param(nullptr) {
 #ifdef CONTINUOUS_QUEUE
         doOpen();
 #endif // CONTINUOUS_QUEUE
@@ -145,8 +154,8 @@ public:
         }
     }
 
-    void write264Data(uint8_t *frame, uint32_t size) {
-        LOGW("write264Data %u\n", size);
+    void write26xData(uint8_t *frame, uint32_t size) {
+        LOGW("write26xData %u\n", size);
         if (closed) {
             return;
         }
@@ -181,18 +190,18 @@ public:
 private:
     void doOpen() {
         queue = new SyncQueue(500);
-        if (createX264Module() < 0) {
-            LOGW("createX264Module failed!\n");
+        if (createX26xModule() < 0) {
+            LOGW("createX26xModule failed!\n");
         }
         closed = false;
     }
 
     void doClose() {
         closed = true;
-        if (encodeX264Frame() < 0) {
-            LOGW("encodeX264Frame failed!\n");
+        if (encodeX26xFrame() < 0) {
+            LOGW("encodeX26xFrame failed!\n");
         }
-        destroyX264Module();
+        destroyX26xModule();
         ByteArray *array;
         while (queue->size() > 0) {
             array = queue->pop();
@@ -207,60 +216,177 @@ private:
     void onEncodedFrame(uint8_t *payload, uint32_t size) {
         uint8_t *data = new uint8_t[size];
         memcpy(data, payload, size);
-        write264Data(data, size);
+        write26xData(data, size);
     }
 
-    int createX264Module() {
-        x264_param_t param;
-        /* Get default params for preset/tuning */
-        if (x264_param_default_preset(&param, "fast", "zerolatency") < 0) {
+#ifdef APPLY_AS_X265
+    int createX26xModule() {
+        param = x265_param_alloc();
+        if (!param) {
+            LOGW("x265_param_alloc failed!\n");
+            return -1;
+        }
+        if (x265_param_default_preset(param, "fast", "zerolatency") < 0) {
+            LOGW("x265_param_default_preset failed!\n");
+            return -1;
+        }
+        param->internalCsp = X265_CSP_I420;
+        param->sourceWidth = kfWidth;
+        param->sourceHeight = kfHeight;
+
+        const int framerate = 25;
+        const int bitrate = 500; /* kbps */
+
+        param->levelIdc = 30;
+        param->fpsNum = (uint32_t) framerate;
+        param->fpsDenom = 1;
+        param->keyframeMax = framerate * 2;
+        param->keyframeMin = framerate / 2;
+
+        param->limitTU = 4;
+        param->tuQTMaxInterDepth = 2;
+        param->maxTUSize = 16;
+
+        param->rc.rateControlMode = X265_RC_ABR;
+        param->rc.bitrate = bitrate;
+        param->rc.vbvMaxBitrate = (int) (bitrate * 1.2);
+        param->rc.vbvBufferSize = param->rc.bitrate;
+        param->rc.vbvBufferInit = 0.9;
+        param->rc.cuTree = 0;
+        param->rc.rfConstant = 25;
+        param->rc.rfConstantMax = 45;
+
+        param->bRepeatHeaders = 1;
+        param->bAnnexB = 1;
+        param->logLevel = X265_LOG_NONE;
+
+        if (x265_param_apply_profile(param, "main") < 0) {
+            LOGW("x265_param_apply_profile failed!\n");
+            return -1;
+        }
+
+        picIn = x265_picture_alloc();
+        if (!picIn) {
+            LOGW("malloc x265_picture_alloc[picIn] failed!\n");
+            return -1;
+        }
+        x265_picture_init(param, picIn);
+
+        picOut = x265_picture_alloc();
+        if (!picOut) {
+            LOGW("malloc x265_picture_alloc[picOut] failed!\n");
+            return -1;
+        }
+        x265_picture_init(param, picOut);
+
+        h = x265_encoder_open(param);
+        if (!h) {
+            LOGW("x265_encoder_open failed!\n");
+            return -1;
+        }
+        return 0;
+    }
+
+    int appendRawFrame(uint8_t *frame_data) {
+        int luma_size = kfWidth * kfHeight;
+        int chroma_size = luma_size / 4;
+        picIn->stride[0] = kfWidth;
+        picIn->stride[1] = kfWidth / 2;
+        picIn->stride[2] = kfWidth / 2;
+        /* we need I420, but we got YV12, so do transfer */
+        picIn->planes[0] = frame_data;
+        picIn->planes[2] = frame_data + luma_size;
+        picIn->planes[1] = frame_data + luma_size + chroma_size;
+
+        ++picIn->pts;
+
+        int ret = x265_encoder_encode(h, &nal, &iNal, picIn, picOut);
+        if (ret > 0) {
+            for (uint32_t i = 0; i < iNal; ++i) {
+                onEncodedFrame(nal[i].payload, (uint32_t) nal[i].sizeBytes);
+            }
+        }
+
+        return ret;
+    }
+
+    int encodeX26xFrame() {
+        while (x265_encoder_encode(h, &nal, &iNal, nullptr, nullptr) > 0) {
+            for (uint32_t i = 0; i < iNal; ++i) {
+                onEncodedFrame(nal[i].payload, (uint32_t) nal[i].sizeBytes);
+            }
+        }
+        return 0;
+    }
+
+    void destroyX26xModule() {
+        x265_cleanup();
+        if (h) {
+            x265_encoder_close(h);
+            h = nullptr;
+        }
+        if (picIn) {
+            x265_picture_free(picIn);
+            picIn = nullptr;
+        }
+        if (picOut) {
+            x265_picture_free(picOut);
+            picOut = nullptr;
+        }
+        if (param) {
+            x265_param_free(param);
+            param = nullptr;
+        }
+    }
+#else /* APPLY_AS_X265 */
+    int createX26xModule() {
+        param = new x264_param_t;
+        if (x264_param_default_preset(param, "fast", "zerolatency") < 0) {
             LOGW("x264_param_default_preset failed!\n");
             return -1;
         }
 
-        /* Configure non-default params */
         const int framerate = FRAME_RATE;
         const int bitrate = BIT_RATE;
-        param.i_csp = X264_CSP_YV12;
-        param.i_width = kfWidth;
-        param.i_height = kfHeight;
-        param.i_level_idc = 30;
-        param.b_vfr_input = 0;
-        param.b_repeat_headers = 1;
-        param.b_annexb = 1;
-        param.b_aud = 1;
-        param.b_cabac = 1;
-        param.i_nal_hrd = X264_NAL_HRD_VBR;
-        param.rc.b_mb_tree = 0;
-        param.rc.f_rf_constant = 25;
-        param.rc.f_rf_constant_max = 45;
-        param.rc.i_rc_method = X264_RC_ABR;
-        param.rc.i_bitrate = bitrate;
-        param.rc.i_vbv_max_bitrate = (int) (bitrate * 1.4);
-        param.rc.i_vbv_buffer_size = param.rc.i_bitrate;
-        param.rc.f_vbv_buffer_init = 0.9;
-        param.i_fps_num = (uint32_t) framerate;
-        param.i_fps_den = 1;
-        param.i_keyint_max = framerate * 2;
-        param.i_log_level = X264_LOG_NONE;
-        param.rc.f_rate_tolerance = 0.02;
-        param.i_frame_reference = 4;
+        param->i_csp = X264_CSP_YV12;
+        param->i_width = kfWidth;
+        param->i_height = kfHeight;
+        param->i_level_idc = 30;
+        param->b_vfr_input = 0;
+        param->b_repeat_headers = 1;
+        param->b_annexb = 1;
+        param->b_aud = 1;
+        param->b_cabac = 1;
+        param->i_nal_hrd = X264_NAL_HRD_VBR;
+        param->rc.b_mb_tree = 0;
+        param->rc.f_rf_constant = 25;
+        param->rc.f_rf_constant_max = 45;
+        param->rc.i_rc_method = X264_RC_ABR;
+        param->rc.i_bitrate = bitrate;
+        param->rc.i_vbv_max_bitrate = (int) (bitrate * 1.4);
+        param->rc.i_vbv_buffer_size = param->rc.i_bitrate;
+        param->rc.f_vbv_buffer_init = 0.9;
+        param->i_fps_num = (uint32_t) framerate;
+        param->i_fps_den = 1;
+        param->i_keyint_max = framerate * 2;
+        param->i_log_level = X264_LOG_NONE;
+        param->rc.f_rate_tolerance = 0.02;
+        param->i_frame_reference = 4;
 
-        /* Apply profile restrictions. */
-        if (x264_param_apply_profile(&param, "baseline") < 0) {
+        if (x264_param_apply_profile(param, "baseline") < 0) {
             LOGW("x264_param_apply_profile failed!\n");
             return -1;
         }
 
         picIn = new x264_picture_t;
-        if (x264_picture_alloc(picIn, param.i_csp, param.i_width, param.i_height) < 0) {
+        if (x264_picture_alloc(picIn, param->i_csp, param->i_width, param->i_height) < 0) {
             LOGW("x264_picture_alloc failed!\n");
             return -1;
         }
 
         picOut = new x264_picture_t;
 
-        h = x264_encoder_open(&param);
+        h = x264_encoder_open(param);
         if (!h) {
             LOGW("x264_encoder_open failed!\n");
             x264_picture_clean(picIn);
@@ -290,7 +416,7 @@ private:
         return 0;
     }
 
-    int encodeX264Frame() {
+    int encodeX26xFrame() {
         int i_frame_size;
         while (x264_encoder_delayed_frames(h)) {
             i_frame_size = x264_encoder_encode(h, &nal, &iNal, nullptr, picOut);
@@ -303,7 +429,7 @@ private:
         return 0;
     }
 
-    void destroyX264Module() {
+    void destroyX26xModule() {
         if (h) {
             x264_encoder_close(h);
             h = nullptr;
@@ -317,20 +443,35 @@ private:
             delete picOut;
             picOut = nullptr;
         }
+        if (param) {
+            delete param;
+            param = nullptr;
+        }
     }
+#endif /* APPLY_AS_X265 */
 
     bool closed;
     SyncQueue *queue;
     uint8_t *lastReadData;
 
+#ifdef APPLY_AS_X265
+    x265_picture *picIn;
+    x265_picture *picOut;
+    x265_encoder *h;
+    x265_nal *nal;
+    uint32_t iNal;
+    x265_param *param;
+#else /* APPLY_AS_X265 */
     x264_picture_t *picIn;
     x264_picture_t *picOut;
     x264_t *h;
     x264_nal_t *nal;
     int iNal;
+    x264_param_t *param;
+#endif /* APPLY_AS_X265 */
 };
 
-static void do_x264_encode(uint8_t *frame) {
+static void do_X26x_encode(uint8_t *frame) {
     MyDataDelegate *delegate = static_cast<MyDataDelegate *>(ExchangerDeviceSource::dataDelegate);
     size_t delay;
     if (!delegate->isClosed()) {
@@ -346,19 +487,24 @@ static void video_server_start() {
     TaskScheduler *scheduler = BasicTaskScheduler::createNew();
     UsageEnvironment *environment = BasicUsageEnvironment::createNew(*scheduler);
     RTSPServer *rtspServer = RTSPServer::createNew(*environment, 8554);
-
-    ExchangerH264VideoServerMediaSubsession::preferBitrate = BIT_RATE;
-    ExchangerH264VideoServerMediaSubsession::preferFramerate = FRAME_RATE;
     ExchangerDeviceSource::dataDelegate = new MyDataDelegate();
 
+#ifdef APPLY_AS_X265
+    ExchangerH265VideoServerMediaSubsession::preferBitrate = BIT_RATE;
+    ExchangerH265VideoServerMediaSubsession::preferFramerate = FRAME_RATE;
+    ServerMediaSession *sms = ServerMediaSession::createNew(*environment, "testH265", "testH265");
+    sms->addSubsession(ExchangerH265VideoServerMediaSubsession::createNew(*environment, False));
+#else /* APPLY_AS_X265 */
+    ExchangerH264VideoServerMediaSubsession::preferBitrate = BIT_RATE;
+    ExchangerH264VideoServerMediaSubsession::preferFramerate = FRAME_RATE;
     ServerMediaSession *sms = ServerMediaSession::createNew(*environment, "testH264", "testH264");
     sms->addSubsession(ExchangerH264VideoServerMediaSubsession::createNew(*environment, False));
-    rtspServer->addServerMediaSession(sms);
+#endif /* APPLY_AS_X265 */
 
+    rtspServer->addServerMediaSession(sms);
     char* url = rtspServer->rtspURL(sms);
     LOGW("Play this stream using the URL \"%s\"\n", url);
     delete[] url;
-
     environment->taskScheduler().doEventLoop();
 }
 
@@ -380,7 +526,7 @@ extern "C" {
     JNI_ER_METHOD(void, YuvConsumer, nativeFillFrame)(JNI_CLASS_PARAM, jbyteArray array) {
         jbyte *fp = env->GetByteArrayElements(array, nullptr);
         if (fp) {
-            do_x264_encode((uint8_t *) fp);
+            do_X26x_encode((uint8_t *) fp);
             env->ReleaseByteArrayElements(array, fp, 0);
         }
     }

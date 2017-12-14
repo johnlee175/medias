@@ -85,7 +85,7 @@ X265Stream *create_x265_module(int width, int height, int csp,
 
     x265_param *param = x265_param_alloc();
     if (!param) {
-        LOGW("malloc x265Stream failed!\n");
+        LOGW("x265_param_alloc failed!\n");
         return NULL;
     }
 

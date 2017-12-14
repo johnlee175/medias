@@ -7,6 +7,7 @@ add_definitions(-DALLOW_SERVER_PORT_REUSE)
 
 include_directories(
             src/main/cpp/include/x264
+            src/main/cpp/include/x265
             src/main/cpp/include/live555
             src/main/cpp/include/rtmp )
 
@@ -18,6 +19,9 @@ add_library( rtmp-stream SHARED
 add_library( x264 SHARED IMPORTED )
 set_target_properties( x264 PROPERTIES IMPORTED_LOCATION
                        ${CMAKE_SOURCE_DIR}/src/main/jniLibs/armeabi/libx264.152.so )
+add_library( x265 SHARED IMPORTED )
+set_target_properties( x265 PROPERTIES IMPORTED_LOCATION
+                       ${CMAKE_SOURCE_DIR}/src/main/jniLibs/armeabi/libx265.so )
 add_library( live555 SHARED IMPORTED )
 set_target_properties( live555 PROPERTIES IMPORTED_LOCATION
                        ${CMAKE_SOURCE_DIR}/src/main/jniLibs/armeabi/liblive555.so )
@@ -31,7 +35,7 @@ set_target_properties( rtmp-pub PROPERTIES IMPORTED_LOCATION
 find_library( log-lib log )
 
 target_link_libraries( rtsp-stream
-                       x264 live555 ${log-lib} )
+                       x264 x265 live555 ${log-lib} )
 
 target_link_libraries( rtmp-stream
                        x264 rtmp rtmp-pub ${log-lib} )

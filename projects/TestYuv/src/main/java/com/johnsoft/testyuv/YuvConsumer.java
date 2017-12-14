@@ -6,8 +6,8 @@ package com.johnsoft.testyuv;
  */
 public class YuvConsumer {
     static {
-//        System.loadLibrary("rtsp-stream");
-        System.loadLibrary("rtmp-stream");
+        System.loadLibrary("rtsp-stream");
+//        System.loadLibrary("rtmp-stream");
     }
 
     public static void initAsync(final int w, final int h) {

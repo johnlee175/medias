@@ -90,8 +90,8 @@ ExchangerH264VideoServerMediaSubsession::getAuxSDPLine(RTPSink *rtpSink,
     if (fAuxSDPLine != nullptr) return fAuxSDPLine; // it's already been set up (for a previous client)
 
     if (fDummyRTPSink == nullptr) { // we're not already setting it up for another, concurrent stream
-        // Note: For H264 video files, the 'config' information ("profile-level-id" and "sprop-parameter-sets") isn't known
-        // until we start reading the file.  This means that "rtpSink"s "auxSDPLine()" will be nullptr initially,
+        // Note: For H264 video files, the 'config' information ("profile-level-id" and "sprop-parameter-sets") isn't
+        // known until we start reading the file.  This means that "rtpSink"s "auxSDPLine()" will be nullptr initially,
         // and we need to start reading data from our file until this changes.
         fDummyRTPSink = rtpSink;
 
