@@ -18,18 +18,42 @@
  * @author John Kenrinus Lee
  * @version 2017-11-14
  */
+#define APPLY_AS_X265
 #include <pthread.h>
 #include <queue>
 #include "common.h"
 #include "base_path.h"
+#ifdef APPLY_AS_X265
+#include "x265_stream.h"
+#include "ExchangerH265VideoServerMediaSubsession.hpp"
+#else
 #include "x264_stream.h"
-#include "ExchangerDeviceSource.hpp"
 #include "ExchangerH264VideoServerMediaSubsession.hpp"
+#endif
+#include "ExchangerDeviceSource.hpp"
 #include "BasicUsageEnvironment.hh"
 #include "liveMedia.hh"
 
+#ifdef APPLY_AS_X265
+#define create_x26x_module create_x265_module
+#define append_yuv_frame_x26x append_yuv_frame_x265
+#define encode_x26x_frame encode_x265_frame
+#define destroy_x26x_module destroy_x265_module
+#define X26xStream X265Stream
+#define ExchangerH26xVideoServerMediaSubsession ExchangerH265VideoServerMediaSubsession
+#define TEST_FRAGMENT "testH265"
+#else
+#define create_x26x_module create_x264_module
+#define append_yuv_frame_x26x append_yuv_frame_x264
+#define encode_x26x_frame encode_x264_frame
+#define destroy_x26x_module destroy_x264_module
+#define X26xStream X264Stream
+#define ExchangerH26xVideoServerMediaSubsession ExchangerH264VideoServerMediaSubsession
+#define TEST_FRAGMENT "testH264"
+#endif
+
 static void on_encoded_frame(uint8_t *payload, uint32_t size, void *user_data);
-static void *do_x264_encode(void *client);
+static void *do_x26x_encode(void *client);
 
 class ByteArray {
 public:
@@ -104,11 +128,11 @@ public:
     void onOpen(ExchangerDeviceSource *source) override {
         LOGW("onOpen\n");
         queue = new SyncQueue(500);
-        if (!(stream = create_x264_module(width, height, -1, nullptr, nullptr, "zerolatency",
+        if (!(stream = create_x26x_module(width, height, -1, nullptr, nullptr, "zerolatency",
                                           nullptr, on_encoded_frame, this))) {
-            LOGW("create_x264_module failed!\n");
+            LOGW("create_x26x_module failed!\n");
         }
-        pthread_create(&pthread, nullptr, do_x264_encode, this);
+        pthread_create(&pthread, nullptr, do_x26x_encode, this);
         closed = false;
     }
 
@@ -137,13 +161,13 @@ public:
         if (closed) {
             return;
         }
-        if (append_yuv_frame_x264(stream, frame) < 0) {
-            LOGW("append_yuv_frame failed!\n");
+        if (append_yuv_frame_x26x(stream, frame) < 0) {
+            LOGW("append_yuv_frame_x26x failed!\n");
         }
     }
 
-    void write264Data(uint8_t *frame, uint32_t size) {
-        LOGW("write264Data %u\n", size);
+    void write26xData(uint8_t *frame, uint32_t size) {
+        LOGW("write26xData %u\n", size);
         if (closed) {
             return;
         }
@@ -161,10 +185,10 @@ public:
         }
         closed = true;
         pthread_join(pthread, nullptr);
-        if (encode_x264_frame(stream) < 0) {
-            LOGW("encode_x264_frame failed!\n");
+        if (encode_x26x_frame(stream) < 0) {
+            LOGW("encode_x26x_frame failed!\n");
         }
-        destroy_x264_module(stream);
+        destroy_x26x_module(stream);
         ByteArray *array;
         while (queue->size() > 0) {
             array = queue->pop();
@@ -188,7 +212,7 @@ public:
     }
 private:
     bool closed;
-    X264Stream *stream;
+    X26xStream *stream;
     SyncQueue *queue;
     uint8_t *lastReadData;
     pthread_t pthread;
@@ -198,10 +222,10 @@ private:
 static void on_encoded_frame(uint8_t *payload, uint32_t size, void *user_data) {
     uint8_t *data = new uint8_t[size];
     memcpy(data, payload, size);
-    dynamic_cast<MyDataDelegate *>(ExchangerDeviceSource::dataDelegate)->write264Data(data, size);
+    dynamic_cast<MyDataDelegate *>(ExchangerDeviceSource::dataDelegate)->write26xData(data, size);
 }
 
-static void *do_x264_encode(void *client) {
+static void *do_x26x_encode(void *client) {
     MyDataDelegate *delegate = static_cast<MyDataDelegate *>(client);
     // ffmpeg -i data/test.mp4 -c:v rawvideo -pix_fmt yuv420p data/test_512x288.yuv
     const char *yuv_file = BASE_PATH"/data/test_512x288.yuv";
@@ -225,11 +249,11 @@ static void video_server_start() {
     RTSPServer *rtspServer = RTSPServer::createNew(*environment, 8554);
 
     ExchangerDeviceSource::dataDelegate = new MyDataDelegate();
-    ExchangerH264VideoServerMediaSubsession::preferBitrate = 100; // kbps
-    ExchangerH264VideoServerMediaSubsession::preferFramerate = 24.0;
+    ExchangerH26xVideoServerMediaSubsession::preferBitrate = 100; // kbps
+    ExchangerH26xVideoServerMediaSubsession::preferFramerate = 24.0;
 
-    ServerMediaSession *sms = ServerMediaSession::createNew(*environment, "testH264", "testH264");
-    sms->addSubsession(ExchangerH264VideoServerMediaSubsession::createNew(*environment, False));
+    ServerMediaSession *sms = ServerMediaSession::createNew(*environment, TEST_FRAGMENT, TEST_FRAGMENT);
+    sms->addSubsession(ExchangerH26xVideoServerMediaSubsession::createNew(*environment, False));
     rtspServer->addServerMediaSession(sms);
 
     char* url = rtspServer->rtspURL(sms);
