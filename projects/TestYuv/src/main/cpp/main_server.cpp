@@ -18,7 +18,7 @@
  * @author John Kenrinus Lee
  * @version 2017-11-14
  */
-#define APPLY_AS_X265
+//#define APPLY_AS_X265
 
 #include "common.h"
 #include "ExchangerDeviceSource.hpp"
@@ -234,8 +234,8 @@ private:
         param->sourceWidth = kfWidth;
         param->sourceHeight = kfHeight;
 
-        const int framerate = 25;
-        const int bitrate = 500; /* kbps */
+        const int framerate = FRAME_RATE;
+        const int bitrate = BIT_RATE;
 
         param->levelIdc = 30;
         param->fpsNum = (uint32_t) framerate;
@@ -311,7 +311,7 @@ private:
     }
 
     int encodeX26xFrame() {
-        while (x265_encoder_encode(h, &nal, &iNal, nullptr, nullptr) > 0) {
+        while (x265_encoder_encode(h, &nal, &iNal, nullptr, picOut) > 0) {
             for (uint32_t i = 0; i < iNal; ++i) {
                 onEncodedFrame(nal[i].payload, (uint32_t) nal[i].sizeBytes);
             }
