@@ -263,7 +263,10 @@ static void video_server_start() {
     environment->taskScheduler().doEventLoop();
 }
 
+#include "vpx/vp8.h"
+
 int main(int argc, char **argv) {
+    LOGW("vpx_codec_version %d\n", vpx_codec_version()); // make sure libvpx.a work
     video_server_start();
     return 0;
 }

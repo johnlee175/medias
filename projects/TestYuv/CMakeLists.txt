@@ -6,6 +6,7 @@ add_definitions(-DOutPacketBufferMaxSize=240000)
 add_definitions(-DALLOW_SERVER_PORT_REUSE)
 
 include_directories(
+            src/main/cpp/include/
             src/main/cpp/include/x264
             src/main/cpp/include/x265
             src/main/cpp/include/live555
@@ -32,10 +33,14 @@ add_library( rtmp-pub SHARED IMPORTED )
 set_target_properties( rtmp-pub PROPERTIES IMPORTED_LOCATION
                        ${CMAKE_SOURCE_DIR}/src/main/jniLibs/armeabi/librtmp-pub.so )
 
+add_library( vpx STATIC IMPORTED )
+set_target_properties( vpx PROPERTIES IMPORTED_LOCATION
+                       ${CMAKE_SOURCE_DIR}/src/main/archives/armeabi/libvpx.a )
+
 find_library( log-lib log )
 
 target_link_libraries( rtsp-stream
-                       x264 x265 live555 ${log-lib} )
+                       x264 x265 vpx live555 ${log-lib} )
 
 target_link_libraries( rtmp-stream
                        x264 rtmp rtmp-pub ${log-lib} )

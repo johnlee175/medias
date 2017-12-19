@@ -517,9 +517,12 @@ extern "C" {
     #define JNI_ER_METHOD(return_value, class_name, method_name) JNIEXPORT return_value JNICALL \
     Java_com_johnsoft_testyuv_##class_name##_##method_name
 
+    #include "vpx/vp8.h"
+
     JNI_ER_METHOD(void, YuvConsumer, nativeInit)(JNI_CLASS_PARAM, jint w, jint h) {
         kfWidth = w;
         kfHeight = h;
+        LOGW("vpx_codec_version=%d\n",vpx_codec_version());
         video_server_start();
     }
 

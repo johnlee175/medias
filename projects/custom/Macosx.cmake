@@ -47,10 +47,12 @@ target_link_libraries(hello_udp ${opencv_libs})
 
 include_directories(librtmp/dist/macosx/include
         x264/include
-        x265/include)
+        x265/include
+        libvpx/include)
 link_directories(librtmp/dist/macosx/lib
         x264/lib
-        x265/lib)
+        x265/lib
+        libvpx/lib)
 
 set(hello_stream_media
         src/stream_media/sps_decode.h
@@ -60,7 +62,7 @@ set(hello_stream_media
         src/stream_media/rtmp_publisher.c
         src/stream_media/ffmpeg_url_client.c)
 
-set(stream_media_depend john_collections x264.152 x265 live555 rtmp ${ffmpeg_libs} ${opencv_libs})
+set(stream_media_depend john_collections x264.152 x265 vpx live555 rtmp ${ffmpeg_libs} ${opencv_libs})
 
 add_executable(stream_media_client ${hello_stream_media} src/stream_media/main_client.cpp)
 add_executable(hello_rtsp_server ${hello_stream_media} src/stream_media/main_rtsp_server.cpp)
