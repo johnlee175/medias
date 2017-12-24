@@ -1,6 +1,5 @@
-Build For Android: [2.6]
-#remove pthread, "-lpthread" in CMakeLists.txt
-#pick #1 or #2
+Build For Android: [2.0.7]
+#pick #1 or #2 or #3
 
 rm -rf build && mkdir build && cd build
 CMAKE_VER=3.6.4111459
@@ -21,8 +20,7 @@ ${ANDROID_HOME}/cmake/${CMAKE_VER}/bin/cmake \
 -DANDROID_TOOLCHAIN=clang \
 -DANDROID_PIE=ON \
 -DANDROID_ARM_MODE=arm \
--G "Android Gradle - Ninja" \
-../source
+-G "Android Gradle - Ninja" ..
 ${ANDROID_HOME}/cmake/${CMAKE_VER}/bin/ninja all
 ${ANDROID_HOME}/cmake/${CMAKE_VER}/bin/ninja install
 
@@ -41,15 +39,24 @@ ${ANDROID_HOME}/cmake/${CMAKE_VER}/bin/cmake \
 -DANDROID_TOOLCHAIN=clang \
 -DANDROID_PIE=ON \
 -DANDROID_ARM_MODE=arm \
--G "Android Gradle - Unix Makefiles" \
-../source
+-G "Android Gradle - Unix Makefiles" ..
 make all && make install
 
-Build For Mac OS X: [2.6]
+#3 [ndk-build]
+./build-scripts/androidbuildlibs.sh
+
+Build For Mac OS X: [2.0.7]
+#pick #1 or #2
+
+#1
 rm -rf build && mkdir build
 cmake \
 -DCMAKE_INSTALL_PREFIX=dist \
 -DCMAKE_BUILD_TYPE=Debug \
--G "Unix Makefiles" \
-../source
+-G "Unix Makefiles" ..
 make && make install
+
+#2
+./configure --prefix=`pwd`/dist && make && make install
+
+Android Include differ with MacOSX Include on SDL_config.h, others are some.
