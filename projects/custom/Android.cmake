@@ -8,7 +8,7 @@ link_directories(librtmp/dist/android/lib
         x265/jniLibs)
 
 include_directories(
-        live555/include
+        live555/include # rtmp module use common.h in here
         src/john_collections)
 
 set(rtmp_pub_src

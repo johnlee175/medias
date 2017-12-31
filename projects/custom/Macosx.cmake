@@ -2,13 +2,11 @@ set(CMAKE_BUILD_TYPE Debug)
 
 include_directories(
         ffmpeg/include
-        opencv/include
-        live555/include)
+        opencv/include)
 
 link_directories(
         ffmpeg/lib
-        opencv/lib
-        live555/lib)
+        opencv/lib)
 
 set(ffmpeg_libs
         avformat
@@ -43,13 +41,24 @@ set(hello_udp_code src/udp/udp_trans.h src/udp/udp_trans.c src/udp/main.cpp)
 add_executable(hello_udp ${hello_udp_code})
 target_link_libraries(hello_udp ${opencv_libs})
 
+#################### base_media_client #######################
+
+link_directories(sdl/lib)
+add_executable(base_media_client
+        src/stream_media/ffmpeg_base_client.h
+        src/stream_media/ffmpeg_base_client.c)
+target_include_directories(base_media_client PRIVATE sdl/include)
+target_link_libraries(base_media_client ${ffmpeg_libs} john_collections SDL2)
+
 #################### hello_stream_media #######################
 
 include_directories(librtmp/dist/macosx/include
+        live555/include
         x264/include
         x265/include
         libvpx/include)
 link_directories(librtmp/dist/macosx/lib
+        live555/lib
         x264/lib
         x265/lib
         libvpx/lib)
