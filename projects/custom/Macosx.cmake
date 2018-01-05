@@ -13,9 +13,10 @@ set(ffmpeg_libs
         avcodec
         avutil
         swscale
+        swresample
         avdevice
         avfilter
-        swresample)
+        postproc)
 
 set(opencv_lib_version 3.3.0)
 set(opencv_libs

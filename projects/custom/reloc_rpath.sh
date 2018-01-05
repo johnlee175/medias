@@ -5,6 +5,7 @@ REPLACEABLE=~/Documents/github/ffmpeg/dist/lib
 REPLACEMENT=@rpath
 
 cd ${LIB_DIR_PATH} && echo "Goto dir $(pwd)"
+rm -rf pkgconfig *.a && find . -type l -exec rm -rf {} \;
 for path in `ls`; do
 	if [[ ${path} =~ .*\.dylib ]]; then
 		echo "install_name_tool -id ${REPLACEMENT}/$(basename ${path}) ${path}"

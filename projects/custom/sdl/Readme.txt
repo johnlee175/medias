@@ -46,17 +46,8 @@ make all && make install
 ./build-scripts/androidbuildlibs.sh
 
 Build For Mac OS X: [2.0.7]
-#pick #1 or #2
-
-#1
-rm -rf build && mkdir build
-cmake \
--DCMAKE_INSTALL_PREFIX=dist \
--DCMAKE_BUILD_TYPE=Debug \
--G "Unix Makefiles" ..
-make && make install
-
-#2
-./configure --prefix=`pwd`/dist && make && make install
+CC=`pwd`/build-scripts/gcc-fat.sh
+rm -rf build && mkdir build && cd build
+../configure --prefix=`pwd`/dist && make -j4 && make install
 
 Android Include differ with MacOSX Include on SDL_config.h, others are some.

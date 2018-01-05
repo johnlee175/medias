@@ -31,12 +31,15 @@ extern "C" {
 #include <libavutil/samplefmt.h>
 
 typedef void (*VideoFrameCallback)(uint8_t *data[8], int line_size[8], uint32_t pixel_precision,
-                              uint32_t width, uint32_t height, int64_t pts_millis);
+                                   uint32_t width, uint32_t height, int64_t pts_millis,
+                                   void *user_tag);
 typedef void (*AudioFrameCallback)(uint8_t *data[8], int line_size[8], uint32_t sample_precision,
-                                   uint32_t nb_channels, uint32_t sample_rate, int64_t pts_millis);
+                                   uint32_t nb_channels, uint32_t sample_rate, int64_t pts_millis,
+                                   void *user_tag);
 
 typedef struct VideoOutRule {
     VideoFrameCallback callback;
+    void *user_tag;
     int width;
     int height;
     enum AVPixelFormat pixel_format;
@@ -44,6 +47,7 @@ typedef struct VideoOutRule {
 
 typedef struct AudioOutRule {
     AudioFrameCallback callback;
+    void *user_tag;
     uint64_t channel_layout;
     int sample_rate;
     enum AVSampleFormat sample_format;

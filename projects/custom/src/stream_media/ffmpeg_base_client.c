@@ -248,8 +248,23 @@ FFmpegClient *open_media(const char *url, VideoOutRule *video_out, AudioOutRule 
     return client;
 }
 
+static int64_t get_pts_time_base(FFmpegClient *client, AVFrame *frame_decoded, int stream_index) {
+    int64_t pts = 0;
+    if (frame_decoded->best_effort_timestamp != AV_NOPTS_VALUE) {
+        pts = frame_decoded->best_effort_timestamp;
+    } else if (frame_decoded->pts != AV_NOPTS_VALUE) {
+        pts = frame_decoded->pts;
+    } else {
+        pts = AV_NOPTS_VALUE;
+    }
+    if (pts != AV_NOPTS_VALUE) {
+        pts = (int64_t) (pts * av_q2d(client->format_context->streams[stream_index]->time_base) * 1000L);
+    }
+    return pts;
+}
+
 void *decode_video_frame(void *data) {
-    LOGW("decode_video_frame!\n");
+    LOGW("begin decode_video_frame!\n");
     FFmpegClient *client = (FFmpegClient *) data;
     if (!client) {
         LOGW("client == NULL!\n");
@@ -273,12 +288,17 @@ void *decode_video_frame(void *data) {
 
     int result_code;
     bool error_happened;
-    while (!client->stop_decode) {
-        error_happened = false;
+    while (true) {
+        if (client->stop_decode && john_synchronized_queue_is_empty(client->video_packet_queue)) {
+            break;
+        }
+
         AVPacket *packet = (AVPacket *) john_synchronized_queue_dequeue(client->video_packet_queue, 1000);
         if (!packet) {
             continue;
         }
+
+        error_happened = false;
 
         int buffer_size = av_image_get_buffer_size(pixel_format, width, height, 1);
         if (buffer_size <= 0) {
@@ -317,13 +337,7 @@ void *decode_video_frame(void *data) {
             goto end_frame;
         }
 
-        double_t pts;
         while ((result_code = avcodec_receive_frame(client->video_codec_context, frame_decoded)) >= 0) {
-            if ((pts = av_frame_get_best_effort_timestamp(frame_decoded)) == AV_NOPTS_VALUE) {
-                pts = 0;
-            }
-            pts *= av_q2d(client->format_context->streams[client->video_stream_index]->time_base);
-
             if ((result_code = sws_scale(client->sws_context, (const uint8_t *const *)frame_decoded->data,
                                          frame_decoded->linesize, 0, client->video_codec_context->height,
                                          frame_result->data, frame_result->linesize)) < 0) {
@@ -332,11 +346,12 @@ void *decode_video_frame(void *data) {
                 LOGW("sws_scale failed with %s!\n", error_buffer);
                 goto end_frame;
             }
-
             if (client->video_out && client->video_out->callback) {
                 client->video_out->callback(frame_result->data, frame_result->linesize,
                                             (uint32_t) av_get_bits_per_pixel(av_pix_fmt_desc_get(pixel_format)),
-                                            (uint32_t) width, (uint32_t) height, (int64_t) (pts * 1000));
+                                            (uint32_t) width, (uint32_t) height,
+                                            get_pts_time_base(client, frame_decoded, client->video_stream_index),
+                                            client->video_out->user_tag);
             }
         }
         if (result_code != -EAGAIN) {
@@ -363,11 +378,12 @@ void *decode_video_frame(void *data) {
     }
 
     av_frame_free(&frame_decoded);
+    LOGW("end decode_video_frame!\n");
     return NULL;
 }
 
 void *decode_audio_frame(void *data) {
-    LOGW("decode_audio_frame!\n");
+    LOGW("begin decode_audio_frame!\n");
     FFmpegClient *client = (FFmpegClient *) data;
     if (!client) {
         LOGW("client == NULL!\n");
@@ -391,7 +407,11 @@ void *decode_audio_frame(void *data) {
     }
 
     int result_code;
-    while (!client->stop_decode) {
+    while (true) {
+        if (client->stop_decode && john_synchronized_queue_is_empty(client->audio_packet_queue)) {
+            break;
+        }
+
         AVPacket *packet = (AVPacket *) john_synchronized_queue_dequeue(client->audio_packet_queue, 1000);
         if (!packet) {
             continue;
@@ -414,13 +434,7 @@ void *decode_audio_frame(void *data) {
             goto end_frame;
         }
 
-        double_t pts;
         while ((result_code = avcodec_receive_frame(client->audio_codec_context, frame_decoded)) >= 0) {
-            if ((pts = av_frame_get_best_effort_timestamp(frame_decoded)) == AV_NOPTS_VALUE) {
-                pts = 0;
-            }
-            pts *= av_q2d(client->format_context->streams[client->audio_stream_index]->time_base);
-
             int out_samples1 = (int) av_rescale_rnd(swr_get_delay(client->swr_context, frame_decoded->sample_rate)
                                              + frame_decoded->nb_samples, sample_rate, frame_decoded->sample_rate,
                                              AV_ROUND_UP);
@@ -438,7 +452,8 @@ void *decode_audio_frame(void *data) {
                 client->audio_out->callback(frame_result->data, frame_result->linesize,
                                             (uint32_t) av_get_bytes_per_sample(sample_format),
                                             (uint32_t) nb_channels, (uint32_t) sample_rate,
-                                            (int64_t) (pts * 1000));
+                                            get_pts_time_base(client, frame_decoded, client->audio_stream_index),
+                                            client->audio_out->user_tag);
             }
         }
 
@@ -459,28 +474,32 @@ void *decode_audio_frame(void *data) {
     }
 
     av_frame_free(&frame_decoded);
+    LOGW("end decode_audio_frame!\n");
     return NULL;
 }
 
 void loop_read_frame(FFmpegClient *client) {
-    LOGW("loop_read_frame!\n");
+    LOGW("begin loop_read_frame!\n");
     if (!client) {
         LOGW("client == NULL!\n");
         return;
     }
 
-    if (pthread_create(&client->video_decode_thread, NULL, decode_video_frame, client)) {
-        LOGW("pthread_create [video_decode_thread] failed!\n");
-        return;
+    if (client->video_stream_index >= 0) {
+        if (pthread_create(&client->video_decode_thread, NULL, decode_video_frame, client)) {
+            LOGW("pthread_create [video_decode_thread] failed!\n");
+            return;
+        }
+        client->video_packet_queue = john_synchronized_queue_create(400, true, NULL);
     }
 
-    if (pthread_create(&client->audio_decode_thread, NULL, decode_audio_frame, client)) {
-        LOGW("pthread_create [audio_decode_thread] failed!\n");
-        return;
+    if (client->audio_stream_index >= 0) {
+        if (pthread_create(&client->audio_decode_thread, NULL, decode_audio_frame, client)) {
+            LOGW("pthread_create [audio_decode_thread] failed!\n");
+            return;
+        }
+        client->audio_packet_queue = john_synchronized_queue_create(400, true, NULL);
     }
-
-    client->video_packet_queue = john_synchronized_queue_create(400, true, NULL);
-    client->audio_packet_queue = john_synchronized_queue_create(400, true, NULL);
 
     while(true) {
         AVPacket *packet = av_packet_alloc();
@@ -555,10 +574,17 @@ void loop_read_frame(FFmpegClient *client) {
     SDL_Delay(1000);
 
     client->stop_decode = true;
-    pthread_join(client->video_decode_thread, NULL);
-    pthread_join(client->audio_decode_thread, NULL);
-    john_synchronized_queue_destroy(client->video_packet_queue);
-    john_synchronized_queue_destroy(client->audio_packet_queue);
+    if (client->video_stream_index >= 0) {
+        pthread_join(client->video_decode_thread, NULL);
+        john_synchronized_queue_destroy(client->video_packet_queue);
+        LOGW("video thread quit!\n");
+    }
+    if (client->audio_stream_index >= 0) {
+        pthread_join(client->audio_decode_thread, NULL);
+        john_synchronized_queue_destroy(client->audio_packet_queue);
+        LOGW("audio thread quit!\n");
+    }
+    LOGW("end loop_read_frame!\n");
 }
 
 void close_media(FFmpegClient *client) {
@@ -583,15 +609,188 @@ void close_media(FFmpegClient *client) {
     }
 }
 
+typedef struct SdlCtx {
+    SDL_Window *window;
+    SDL_Renderer *renderer;
+    SDL_Surface *surface;
+    SDL_Texture *texture;
+    SDL_AudioDeviceID audio_device_id;
+    int64_t video_pts_millis;
+    int64_t audio_pts_millis;
+} SdlCtx;
+
+static SdlCtx *SdlCtx_create() {
+    SdlCtx *sdl_ctx = (SdlCtx *) malloc(sizeof(SdlCtx));
+    if (!sdl_ctx) {
+        LOGW( "malloc SdlCtx *sdl_ctx failed!\n");
+        return NULL;
+    }
+    memset(sdl_ctx, 0, sizeof(SdlCtx));
+    if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER)) {
+        LOGW( "Could not initialize SDL - %s\n", SDL_GetError());
+        free(sdl_ctx);
+        return NULL;
+    }
+    return sdl_ctx;
+}
+
+static void SdlCtx_destroy(SdlCtx *sdl_ctx) {
+    if (sdl_ctx) {
+        SDL_Quit();
+        free(sdl_ctx);
+    }
+}
+
+static int SdlCtx_createVideo(SdlCtx *sdl_ctx, int width, int height) {
+    if (!sdl_ctx) {
+        LOGW("sdl_ctx is NULL!\n");
+        return -1;
+    }
+    sdl_ctx->window = SDL_CreateWindow("SDL-Play",
+                                         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                                         width, height, SDL_WINDOW_SHOWN);
+    if (!sdl_ctx->window) {
+        LOGW("Call SDL_CreateWindow failed with %s!\n", SDL_GetError());
+        return -1;
+    }
+    sdl_ctx->renderer = SDL_CreateRenderer(sdl_ctx->window, -1,
+                                             SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    if (!sdl_ctx->renderer) {
+        LOGW("Call SDL_CreateRenderer failed with %s!\n", SDL_GetError());
+        return -1;
+    }
+    sdl_ctx->texture = SDL_CreateTexture(sdl_ctx->renderer, SDL_PIXELFORMAT_BGR24,
+                                           SDL_TEXTUREACCESS_STREAMING, width, height);
+    if (!sdl_ctx->texture) {
+        LOGW("Call SDL_CreateTexture failed with %s!\n", SDL_GetError());
+        return -1;
+    }
+    return 0;
+}
+
+static void SdlCtx_destroyVideo(SdlCtx *sdl_ctx) {
+    if (sdl_ctx) {
+        if (sdl_ctx->texture) {
+            SDL_DestroyTexture(sdl_ctx->texture);
+        }
+        if (sdl_ctx->renderer) {
+            SDL_DestroyRenderer(sdl_ctx->renderer);
+        }
+        if (sdl_ctx->window) {
+            SDL_DestroyWindow(sdl_ctx->window);
+        }
+    }
+}
+
+static int SdlCtx_createAudio(SdlCtx *sdl_ctx, int sample_rate, bool stereo) {
+    if (!sdl_ctx) {
+        LOGW("sdl_ctx is NULL!\n");
+        return -1;
+    }
+    SDL_AudioSpec wanted_spec, obtained_spec;
+    SDL_zero(wanted_spec);
+    wanted_spec.freq = sample_rate;
+    wanted_spec.format = AUDIO_S16SYS;
+    wanted_spec.channels = (Uint8) (stereo ? 2 : 1);
+    wanted_spec.silence = 0;
+    wanted_spec.samples = 1024;
+    wanted_spec.callback = NULL;
+    sdl_ctx->audio_device_id = SDL_OpenAudioDevice(NULL, 0, &wanted_spec, &obtained_spec,
+                                                   SDL_AUDIO_ALLOW_FORMAT_CHANGE);
+    if (sdl_ctx->audio_device_id == 0) {
+        LOGW("Call SDL_OpenAudioDevice failed with %s!\n", SDL_GetError());
+        return -1;
+    }
+    if (obtained_spec.format != wanted_spec.format) { /* we let this one thing change. */
+        LOGW("Using closest audio format which sound card supported instead!\n");
+    }
+    SDL_PauseAudioDevice(sdl_ctx->audio_device_id, 0); /* start audio playing. */
+    return 0;
+}
+
+static void SdlCtx_destroyAudio(SdlCtx *sdl_ctx) {
+    if (sdl_ctx) {
+        SDL_PauseAudioDevice(sdl_ctx->audio_device_id, 1); /* stop audio playing. */
+        SDL_CloseAudioDevice(sdl_ctx->audio_device_id);
+    }
+}
+
+static void video_callback(uint8_t *data[8], int line_size[8], uint32_t pixel_precision,
+                           uint32_t width, uint32_t height, int64_t pts_millis, void *user_tag) {
+    static bool has_raise = false;
+    SdlCtx *sdl_ctx = (SdlCtx *) user_tag;
+    if (sdl_ctx) {
+        if (!has_raise) {
+            SDL_RaiseWindow(sdl_ctx->window);
+            has_raise = true;
+        }
+        SDL_UpdateTexture(sdl_ctx->texture, NULL, data[0], line_size[0]);
+        SDL_RenderClear(sdl_ctx->renderer);
+        SDL_RenderCopy(sdl_ctx->renderer, sdl_ctx->texture, NULL, NULL);
+        SDL_RenderPresent(sdl_ctx->renderer);
+        if (pts_millis >= 0) {
+            Uint32 delay = (Uint32) (pts_millis - sdl_ctx->video_pts_millis);
+            sdl_ctx->video_pts_millis = pts_millis;
+            SDL_Delay(delay);
+        } else {
+            SDL_Delay(40);
+        }
+    }
+}
+
+static void audio_callback(uint8_t *data[8], int line_size[8], uint32_t sample_precision,
+                           uint32_t nb_channels, uint32_t sample_rate, int64_t pts_millis, void *user_tag) {
+    SdlCtx *sdl_ctx = (SdlCtx *) user_tag;
+    if (sdl_ctx) {
+        SDL_QueueAudio(sdl_ctx->audio_device_id, data[0], (Uint32) line_size[0]);
+        if (pts_millis >= 0) {
+            Uint32 delay = (Uint32) (pts_millis - sdl_ctx->audio_pts_millis);
+            sdl_ctx->audio_pts_millis = pts_millis;
+            SDL_Delay(delay);
+        } else {
+            SDL_Delay(25);
+        }
+    }
+}
+
 int main(int argc, char **argv) {
+    SdlCtx *sdl_ctx = SdlCtx_create();
+    if (!sdl_ctx) {
+        LOGW("Call SdlCtx_create() failed!\n");
+        return -1;
+    }
+
+    VideoOutRule videoOutRule;
+    videoOutRule.width = 800;
+    videoOutRule.height = 600;
+    videoOutRule.pixel_format = AV_PIX_FMT_BGR24;
+    videoOutRule.callback = video_callback;
+    videoOutRule.user_tag = sdl_ctx;
+
     AudioOutRule audioOutRule;
     audioOutRule.sample_format = AV_SAMPLE_FMT_S16;
     audioOutRule.sample_rate = 16000;
     audioOutRule.channel_layout = AV_CH_LAYOUT_MONO;
-    FFmpegClient *client = open_media(BASE_PATH"/data/choose-c.mp3", NULL, &audioOutRule);
+    audioOutRule.callback = audio_callback;
+    audioOutRule.user_tag = sdl_ctx;
+
+    if (SdlCtx_createVideo(sdl_ctx, videoOutRule.width, videoOutRule.height) < 0) {
+        LOGW("Call SdlCtx_createVideo() failed!\n");
+        return -1;
+    }
+    if (SdlCtx_createAudio(sdl_ctx, audioOutRule.sample_rate, false) < 0) {
+        LOGW("Call SdlCtx_createAudio() failed!\n");
+        return -1;
+    }
+
+    FFmpegClient *client = open_media(BASE_PATH"/data/test.mp4", &videoOutRule, &audioOutRule);
     if (client) {
         loop_read_frame(client);
         close_media(client);
     }
+
+    SdlCtx_destroyAudio(sdl_ctx);
+    SdlCtx_destroyVideo(sdl_ctx);
+    SdlCtx_destroy(sdl_ctx);
     return 0;
 }
