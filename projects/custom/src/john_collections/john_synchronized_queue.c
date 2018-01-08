@@ -25,6 +25,10 @@
 #include "john_queue.h"
 #include "john_synchronized_queue.h"
 
+#if defined(JOHN_DEBUG) || defined(JOHN_QUEUE_DEBUG)
+#include "common.h"
+#endif
+
 struct JohnSynchronizedQueue {
     JohnQueue *queue;
     bool replace_oldest;
@@ -42,6 +46,10 @@ JohnSynchronizedQueue *john_synchronized_queue_create(uint32_t capacity,
         synchronized_queue->queue = john_queue_create(capacity);
         synchronized_queue->replace_oldest = replace_oldest;
         synchronized_queue->return_on_empty = return_on_empty;
+
+#if defined(JOHN_DEBUG) || defined(JOHN_QUEUE_DEBUG)
+        LOGW("queue [%p] create by [%p]\n", synchronized_queue->queue, synchronized_queue);
+#endif
 
         pthread_mutex_init(&synchronized_queue->lock, NULL);
         pthread_cond_init(&synchronized_queue->empty_condition, NULL);
@@ -89,6 +97,10 @@ bool john_synchronized_queue_enqueue(JohnSynchronizedQueue *synchronized_queue, 
         clock_gettime(CLOCK_REALTIME, &now);
         now.tv_sec += timeout_millis / 1000;
         now.tv_nsec += (timeout_millis % 1000) * 1000000;
+        if (now.tv_nsec > 1000000000) {
+            now.tv_sec += 1;
+            now.tv_nsec -= 1000000000;
+        }
         while (true) {
             rc = pthread_cond_timedwait(&synchronized_queue->full_condition, &synchronized_queue->lock, &now);
             if (!john_queue_is_full(synchronized_queue->queue)) {
@@ -147,6 +159,10 @@ void *john_synchronized_queue_dequeue(JohnSynchronizedQueue *synchronized_queue,
         clock_gettime(CLOCK_REALTIME, &now);
         now.tv_sec += timeout_millis / 1000;
         now.tv_nsec += (timeout_millis % 1000) * 1000000;
+        if (now.tv_nsec > 1000000000) {
+            now.tv_sec += 1;
+            now.tv_nsec -= 1000000000;
+        }
         while (true) {
             rc = pthread_cond_timedwait(&synchronized_queue->empty_condition, &synchronized_queue->lock, &now);
             if (!john_queue_is_empty(synchronized_queue->queue)) {

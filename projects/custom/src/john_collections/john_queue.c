@@ -22,6 +22,10 @@
 #include <memory.h>
 #include "john_queue.h"
 
+#if defined(JOHN_DEBUG) || defined(JOHN_QUEUE_DEBUG)
+#include "common.h"
+#endif
+
 typedef struct JohnQueueNode {
     void *data;
     struct JohnQueueNode *next;
@@ -67,6 +71,9 @@ bool john_queue_enqueue(JohnQueue *queue, void *data) {
             }
             queue->tail = node;
             ++queue->size;
+#if defined(JOHN_DEBUG) || defined(JOHN_QUEUE_DEBUG)
+            LOGW("queue [%p] size is %u\n", queue, queue->size);
+#endif
             return true;
         }
     }
@@ -77,6 +84,9 @@ void *john_queue_dequeue(JohnQueue *queue) {
     if (queue && queue->head && queue->size > 0) {
         void *data = queue->head->data;
         --queue->size;
+#if defined(JOHN_DEBUG) || defined(JOHN_QUEUE_DEBUG)
+        LOGW("queue [%p] size is %u\n", queue, queue->size);
+#endif
         if (queue->head == queue->tail) {
             free(queue->head);
             queue->head = NULL;

@@ -83,6 +83,10 @@ void *john_sync_ring_buffer_read(JohnSyncRingBuffer *ring_buffer, int32_t timeou
         clock_gettime(CLOCK_REALTIME, &now);
         now.tv_sec += timeout_millis / 1000;
         now.tv_nsec += (timeout_millis % 1000) * 1000000;
+        if (now.tv_nsec > 1000000000) {
+            now.tv_sec += 1;
+            now.tv_nsec -= 1000000000;
+        }
         while (true) {
             rc = pthread_cond_timedwait(&ring_buffer->condition, &ring_buffer->lock, &now);
             if ((result = john_ring_buffer_read(ring_buffer->ring_buffer, ring_buffer->return_on_empty)) !=
