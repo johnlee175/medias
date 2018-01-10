@@ -30,11 +30,11 @@ extern "C" {
 #include <libavutil/pixfmt.h>
 #include <libavutil/samplefmt.h>
 
-typedef void (*VideoFrameCallback)(uint8_t *data[8], int line_size[8], uint32_t pixel_precision,
+typedef void (*VideoFrameCallback)(uint8_t **data, int *line_size, uint32_t pixel_precision,
                                    uint32_t width, uint32_t height, int64_t pts_millis,
                                    void *user_tag);
-typedef void (*AudioFrameCallback)(uint8_t *data[8], int line_size[8], uint32_t sample_precision,
-                                   uint32_t nb_channels, uint32_t sample_rate, int64_t pts_millis,
+typedef void (*AudioFrameCallback)(uint8_t **data, int *line_size, uint32_t sample_precision,
+                                   uint32_t channels, uint32_t sample_rate, int64_t pts_millis,
                                    void *user_tag);
 
 typedef struct VideoOutRule {
@@ -43,6 +43,7 @@ typedef struct VideoOutRule {
     int width;
     int height;
     enum AVPixelFormat pixel_format;
+    uint32_t play_queue_size;
 } VideoOutRule;
 
 typedef struct AudioOutRule {
@@ -51,6 +52,7 @@ typedef struct AudioOutRule {
     uint64_t channel_layout;
     int sample_rate;
     enum AVSampleFormat sample_format;
+    uint32_t play_queue_size;
 } AudioOutRule;
 
 typedef struct FFmpegClient FFmpegClient;
