@@ -97,7 +97,7 @@ bool john_synchronized_queue_enqueue(JohnSynchronizedQueue *synchronized_queue, 
         clock_gettime(CLOCK_REALTIME, &now);
         now.tv_sec += timeout_millis / 1000;
         now.tv_nsec += (timeout_millis % 1000) * 1000000;
-        if (now.tv_nsec > 1000000000) {
+        while (now.tv_nsec > 1000000000) {
             now.tv_sec += 1;
             now.tv_nsec -= 1000000000;
         }
@@ -159,7 +159,7 @@ void *john_synchronized_queue_dequeue(JohnSynchronizedQueue *synchronized_queue,
         clock_gettime(CLOCK_REALTIME, &now);
         now.tv_sec += timeout_millis / 1000;
         now.tv_nsec += (timeout_millis % 1000) * 1000000;
-        if (now.tv_nsec > 1000000000) {
+        while (now.tv_nsec > 1000000000) {
             now.tv_sec += 1;
             now.tv_nsec -= 1000000000;
         }

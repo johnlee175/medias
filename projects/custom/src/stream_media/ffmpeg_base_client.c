@@ -37,7 +37,7 @@ static int thread_sleep(pthread_mutex_t *mutex, pthread_cond_t *cond, int64_t ti
             if (!clock_gettime(CLOCK_REALTIME, &spec)) {
                 spec.tv_sec += timeout_millis / 1000;
                 spec.tv_nsec += (timeout_millis % 1000) * 1000000;
-                if (spec.tv_nsec > 1000000000) {
+                while (spec.tv_nsec > 1000000000) {
                     spec.tv_sec += 1;
                     spec.tv_nsec -= 1000000000;
                 }
@@ -58,6 +58,16 @@ static int thread_sleep(pthread_mutex_t *mutex, pthread_cond_t *cond, int64_t ti
         LOGW("mutex or cond is NULL, or timeout_millis <= 0!\n");
     }
     return result_code;
+}
+
+static int64_t system_current_millis() {
+    struct timespec spec;
+    clock_gettime(CLOCK_REALTIME, &spec);
+    while (spec.tv_nsec > 1000000000) {
+        spec.tv_sec += 1;
+        spec.tv_nsec -= 1000000000;
+    }
+    return (spec.tv_sec * 1000000000 + spec.tv_nsec) / 1000000;
 }
 
 #define ERROR_BUFFER_SIZE 512
@@ -202,6 +212,7 @@ FFmpegClient *open_media(const char *url, VideoOutRule *video_out, AudioOutRule 
         int h = client->video_codec_context->height;
         enum AVPixelFormat pixel_fmt = client->video_codec_context->pix_fmt;
         if (client->video_out) {
+            client->video_out->has_video = true;
             if (client->video_out->width > 0 && client->video_out->height > 0) {
                 w = client->video_out->width;
                 h = client->video_out->height;
@@ -279,6 +290,7 @@ FFmpegClient *open_media(const char *url, VideoOutRule *video_out, AudioOutRule 
         int sample_rate = client->audio_codec_context->sample_rate;
         enum AVSampleFormat sample_fmt = client->audio_codec_context->sample_fmt;
         if (client->audio_out) {
+            client->audio_out->has_audio = true;
             if (client->audio_out->channel_layout > 0) {
                 channel_layout = client->audio_out->channel_layout;
             } else {
@@ -1002,6 +1014,9 @@ static int SdlCtx_createAudio(SdlCtx *sdl_ctx, int sample_rate, int frame_sample
 
 static void SdlCtx_destroyAudio(SdlCtx *sdl_ctx) {
     if (sdl_ctx) {
+        /* wait audio play finish */
+        while (SDL_GetQueuedAudioSize(sdl_ctx->audio_device_id) > 0);
+
         SDL_PauseAudioDevice(sdl_ctx->audio_device_id, 1); /* stop audio playing. */
         SDL_CloseAudioDevice(sdl_ctx->audio_device_id);
 
@@ -1023,13 +1038,24 @@ static void video_callback(uint8_t **data, int *line_size, uint32_t pixel_precis
         SDL_RenderClear(sdl_ctx->renderer);
         SDL_RenderCopy(sdl_ctx->renderer, sdl_ctx->texture, NULL, NULL);
         SDL_RenderPresent(sdl_ctx->renderer);
+
+        Uint32 delay;
         if (pts_millis >= 0) {
-            Uint32 delay = (Uint32) (pts_millis - sdl_ctx->video_pts_millis);
-            sdl_ctx->video_pts_millis = pts_millis;
-            thread_sleep(&sdl_ctx->video_thread_mutex, &sdl_ctx->video_thread_sleep_cond, delay);
+            if (pts_millis < sdl_ctx->video_pts_millis) {
+                LOGW("pts_millis < sdl_ctx->video_pts_millis: %lld, %lld\n", pts_millis, sdl_ctx->video_pts_millis);
+                sdl_ctx->video_pts_millis = pts_millis;
+                return;
+            }
+            delay = (Uint32) (pts_millis - sdl_ctx->video_pts_millis);
         } else {
-            thread_sleep(&sdl_ctx->video_thread_mutex, &sdl_ctx->video_thread_sleep_cond, 40);
+            delay = 40;
         }
+        if (sdl_ctx->audio_pts_millis - sdl_ctx->video_pts_millis < 0) {
+            thread_sleep(&sdl_ctx->video_thread_mutex, &sdl_ctx->video_thread_sleep_cond, delay * 2);
+        } else if (sdl_ctx->audio_pts_millis - sdl_ctx->video_pts_millis < delay) {
+            thread_sleep(&sdl_ctx->video_thread_mutex, &sdl_ctx->video_thread_sleep_cond, delay);
+        }
+        sdl_ctx->video_pts_millis += delay;
     }
 }
 
@@ -1038,17 +1064,31 @@ static void audio_callback(uint8_t **data, int *line_size, uint32_t sample_preci
     SdlCtx *sdl_ctx = (SdlCtx *) user_tag;
     if (sdl_ctx) {
         SDL_QueueAudio(sdl_ctx->audio_device_id, data[0], (Uint32) line_size[0]);
+
+        Uint32 delay;
         if (pts_millis >= 0) {
-            Uint32 delay = (Uint32) (pts_millis - sdl_ctx->audio_pts_millis);
-            sdl_ctx->audio_pts_millis = pts_millis;
-            thread_sleep(&sdl_ctx->audio_thread_mutex, &sdl_ctx->audio_thread_sleep_cond, delay);
+            if (pts_millis < sdl_ctx->audio_pts_millis) {
+                LOGW("pts_millis < sdl_ctx->audio_pts_millis: %lld, %lld\n", pts_millis, sdl_ctx->audio_pts_millis);
+                sdl_ctx->audio_pts_millis = pts_millis;
+                return;
+            }
+            delay = (Uint32) (pts_millis - sdl_ctx->audio_pts_millis);
         } else {
-            thread_sleep(&sdl_ctx->audio_thread_mutex, &sdl_ctx->audio_thread_sleep_cond, 25);
+            delay = 25;
         }
+        thread_sleep(&sdl_ctx->audio_thread_mutex, &sdl_ctx->audio_thread_sleep_cond, delay);
+        sdl_ctx->audio_pts_millis += delay;
     }
 }
 
 int main(int argc, char **argv) {
+    const char *url;
+    if (argc < 2) {
+        url = BASE_PATH"/data/test.mp4";
+    } else {
+        url = argv[1];
+    }
+
     SdlCtx *sdl_ctx = SdlCtx_create();
     if (!sdl_ctx) {
         LOGW("Call SdlCtx_create() failed!\n");
@@ -1062,6 +1102,7 @@ int main(int argc, char **argv) {
     videoOutRule.callback = video_callback;
     videoOutRule.user_tag = sdl_ctx;
     videoOutRule.play_queue_size = 0;
+    videoOutRule.has_video = false;
 
     AudioOutRule audioOutRule;
     audioOutRule.sample_format = AV_SAMPLE_FMT_S16;
@@ -1070,26 +1111,32 @@ int main(int argc, char **argv) {
     audioOutRule.callback = audio_callback;
     audioOutRule.user_tag = sdl_ctx;
     audioOutRule.play_queue_size = 0;
+    audioOutRule.has_audio = false;
 
-    FFmpegClient *client = open_media(BASE_PATH"/data/test.mp4", &videoOutRule, &audioOutRule);
+    FFmpegClient *client = open_media(url, &videoOutRule, &audioOutRule);
     if (client) {
-        if (SdlCtx_createVideo(sdl_ctx, videoOutRule.width, videoOutRule.height) < 0) {
-            LOGW("Call SdlCtx_createVideo() failed!\n");
-            return -1;
+        if (videoOutRule.has_video) {
+            if (SdlCtx_createVideo(sdl_ctx, videoOutRule.width, videoOutRule.height) < 0) {
+                LOGW("Call SdlCtx_createVideo() failed!\n");
+                return -1;
+            }
         }
-        if (SdlCtx_createAudio(sdl_ctx, audioOutRule.sample_rate, 1024) < 0) {
-            LOGW("Call SdlCtx_createAudio() failed!\n");
-            return -1;
+        if (audioOutRule.has_audio) {
+            if (SdlCtx_createAudio(sdl_ctx, audioOutRule.sample_rate, 1024) < 0) {
+                LOGW("Call SdlCtx_createAudio() failed!\n");
+                return -1;
+            }
         }
 
         loop_read_frame(client);
         close_media(client);
 
-        /* wait audio play finish */
-        while (SDL_GetQueuedAudioSize(sdl_ctx->audio_device_id) > 0);
-
-        SdlCtx_destroyAudio(sdl_ctx);
-        SdlCtx_destroyVideo(sdl_ctx);
+        if (videoOutRule.has_video) {
+            SdlCtx_destroyVideo(sdl_ctx);
+        }
+        if (audioOutRule.has_audio) {
+            SdlCtx_destroyAudio(sdl_ctx);
+        }
     }
 
     SdlCtx_destroy(sdl_ctx);

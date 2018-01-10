@@ -44,6 +44,7 @@ typedef struct VideoOutRule {
     int height;
     enum AVPixelFormat pixel_format;
     uint32_t play_queue_size;
+    bool has_video;
 } VideoOutRule;
 
 typedef struct AudioOutRule {
@@ -53,6 +54,7 @@ typedef struct AudioOutRule {
     int sample_rate;
     enum AVSampleFormat sample_format;
     uint32_t play_queue_size;
+    bool has_audio;
 } AudioOutRule;
 
 typedef struct FFmpegClient FFmpegClient;
