@@ -20,6 +20,7 @@
  */
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libavutil/parseutils.h>
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
 #include <libswresample/swresample.h>
@@ -73,6 +74,7 @@ static int64_t system_current_millis() {
 #define ERROR_BUFFER_SIZE 512
 #define PACKET_SIZE 4096
 #define QUEUE_SIZE 500
+#define SEEK_THRESHOLD 1000
 
 typedef struct VideoCallbackData {
     uint8_t **data;
@@ -753,7 +755,7 @@ void *decode_audio_frame(void *data) {
     return NULL;
 }
 
-void loop_read_frame(FFmpegClient *client) {
+void loop_read_frame(FFmpegClient *client, int64_t start_play_millis) {
     LOGW("begin loop_read_frame!\n");
     if (!client) {
         LOGW("client == NULL!\n");
@@ -771,6 +773,20 @@ void loop_read_frame(FFmpegClient *client) {
             return;
         }
         LOGW("video_packet_queue [%p]\n", client->video_packet_queue);
+
+        if (start_play_millis > 0) {
+            AVRational time_base = client->format_context->streams[client->video_stream_index]->time_base;
+            int64_t timestamp = av_rescale_q(start_play_millis * 1000, AV_TIME_BASE_Q, time_base);
+            int result_code;
+            if ((result_code = av_seek_frame(client->format_context, client->video_stream_index,
+                                             timestamp, AVSEEK_FLAG_BACKWARD)) < 0) {
+                char error_buffer[ERROR_BUFFER_SIZE];
+                av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
+                LOGW("av_seek_frame(video_stream_index) failed with %s!\n", error_buffer);
+            } else {
+                avcodec_flush_buffers(client->video_codec_context);
+            }
+        }
     }
 
     if (client->audio_stream_index >= 0) {
@@ -784,9 +800,23 @@ void loop_read_frame(FFmpegClient *client) {
             return;
         }
         LOGW("audio_packet_queue [%p]\n", client->audio_packet_queue);
+
+        if (start_play_millis > 0) {
+            AVRational time_base = client->format_context->streams[client->audio_stream_index]->time_base;
+            int64_t timestamp = av_rescale_q(start_play_millis * 1000, AV_TIME_BASE_Q, time_base);
+            int result_code;
+            if ((result_code = av_seek_frame(client->format_context, client->audio_stream_index,
+                                             timestamp, AVSEEK_FLAG_BACKWARD)) < 0) {
+                char error_buffer[ERROR_BUFFER_SIZE];
+                av_strerror(result_code, error_buffer, ERROR_BUFFER_SIZE);
+                LOGW("av_seek_frame(audio_stream_index) failed with %s!\n", error_buffer);
+            } else {
+                avcodec_flush_buffers(client->audio_codec_context);
+            }
+        }
     }
 
-    while(true) {
+    while (true) {
         AVPacket *packet = av_packet_alloc();
         if (!packet) {
             LOGW("av_packet_alloc failed!\n");
@@ -1041,6 +1071,11 @@ static void video_callback(uint8_t **data, int *line_size, uint32_t pixel_precis
 
         Uint32 delay;
         if (pts_millis >= 0) {
+            if (llabs(pts_millis - sdl_ctx->video_pts_millis) > SEEK_THRESHOLD) {
+                LOGW("detach video seek: %lld, %lld\n", pts_millis, sdl_ctx->audio_pts_millis);
+                sdl_ctx->video_pts_millis = pts_millis;
+                return;
+            }
             if (pts_millis < sdl_ctx->video_pts_millis) {
                 LOGW("pts_millis < sdl_ctx->video_pts_millis: %lld, %lld\n", pts_millis, sdl_ctx->video_pts_millis);
                 sdl_ctx->video_pts_millis = pts_millis;
@@ -1067,6 +1102,11 @@ static void audio_callback(uint8_t **data, int *line_size, uint32_t sample_preci
 
         Uint32 delay;
         if (pts_millis >= 0) {
+            if (llabs(pts_millis - sdl_ctx->audio_pts_millis) > SEEK_THRESHOLD) {
+                LOGW("detach audio seek: %lld, %lld\n", pts_millis, sdl_ctx->audio_pts_millis);
+                sdl_ctx->audio_pts_millis = pts_millis;
+                return;
+            }
             if (pts_millis < sdl_ctx->audio_pts_millis) {
                 LOGW("pts_millis < sdl_ctx->audio_pts_millis: %lld, %lld\n", pts_millis, sdl_ctx->audio_pts_millis);
                 sdl_ctx->audio_pts_millis = pts_millis;
@@ -1083,10 +1123,22 @@ static void audio_callback(uint8_t **data, int *line_size, uint32_t sample_preci
 
 int main(int argc, char **argv) {
     const char *url;
-    if (argc < 2) {
-        url = BASE_PATH"/data/test.mp4";
-    } else {
+    if (argc > 1) {
         url = argv[1];
+    } else {
+        url = BASE_PATH"/data/test.mp4";
+    }
+
+    int64_t start_play_millis;
+    if (argc > 2) {
+        if (av_parse_time(&start_play_millis, argv[2], 1) >= 0) {
+            start_play_millis /= 1000;
+        } else {
+            LOGW("Call av_parse_time() failed!\n");
+            start_play_millis = 0;
+        }
+    } else {
+        start_play_millis = 0;
     }
 
     SdlCtx *sdl_ctx = SdlCtx_create();
@@ -1128,7 +1180,7 @@ int main(int argc, char **argv) {
             }
         }
 
-        loop_read_frame(client);
+        loop_read_frame(client, start_play_millis);
         close_media(client);
 
         if (videoOutRule.has_video) {

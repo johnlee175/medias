@@ -60,7 +60,7 @@ typedef struct AudioOutRule {
 typedef struct FFmpegClient FFmpegClient;
 
 FFmpegClient *open_media(const char *url, VideoOutRule *video_out, AudioOutRule *audio_out);
-void loop_read_frame(FFmpegClient *client);
+void loop_read_frame(FFmpegClient *client, int64_t start_play_millis);
 void close_media(FFmpegClient *client);
 
 #ifdef __cplusplus
