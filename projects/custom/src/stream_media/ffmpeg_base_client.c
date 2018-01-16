@@ -927,6 +927,7 @@ void close_media(FFmpegClient *client) {
 }
 
 #include <SDL2/SDL.h>
+#include <signal.h>
 
 typedef struct SdlCtx {
     SDL_Window *window;
@@ -1119,6 +1120,12 @@ static void audio_callback(uint8_t **data, int *line_size, uint32_t sample_preci
     }
 }
 
+static void handle_signal(int sig) {
+    if (sig == SIGQUIT || sig == SIGINT) {
+        exit(0);
+    }
+}
+
 int main(int argc, char **argv) {
     const char *url;
     if (argc > 1) {
@@ -1138,6 +1145,12 @@ int main(int argc, char **argv) {
     } else {
         start_play_millis = 0;
     }
+
+    struct sigaction sigact;
+    sigact.sa_handler = handle_signal;
+    sigact.sa_flags = 0;
+    sigaction(SIGQUIT, &sigact, NULL);
+    sigaction(SIGINT, &sigact, NULL);
 
     trace_malloc_free_create();
 
