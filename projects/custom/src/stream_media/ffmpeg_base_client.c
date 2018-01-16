@@ -29,6 +29,7 @@
 #include "common.h"
 #include "john_synchronized_queue.h"
 #include "ffmpeg_base_client.h"
+#include "trace_malloc_free.h"
 
 static int thread_sleep(pthread_mutex_t *mutex, pthread_cond_t *cond, int64_t timeout_millis) {
     int result_code = -1;
@@ -822,10 +823,7 @@ void loop_read_frame(FFmpegClient *client, int64_t start_play_millis) {
             LOGW("av_packet_alloc failed!\n");
             break;
         }
-        if (av_new_packet(packet, PACKET_SIZE)) {
-            LOGW("av_new_packet failed!\n");
-            break;
-        }
+        av_init_packet(packet);
 
         int result_code;
         if ((result_code = av_read_frame(client->format_context, packet)) < 0) {
@@ -1141,6 +1139,8 @@ int main(int argc, char **argv) {
         start_play_millis = 0;
     }
 
+    trace_malloc_free_create();
+
     SdlCtx *sdl_ctx = SdlCtx_create();
     if (!sdl_ctx) {
         LOGW("Call SdlCtx_create() failed!\n");
@@ -1192,5 +1192,8 @@ int main(int argc, char **argv) {
     }
 
     SdlCtx_destroy(sdl_ctx);
+
+    trace_malloc_free_destroy();
+
     return 0;
 }

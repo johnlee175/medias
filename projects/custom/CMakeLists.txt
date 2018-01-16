@@ -6,17 +6,18 @@ set(CMAKE_CXX_STANDARD 11)
 add_definitions(-DOutPacketBufferMaxSize=240000)
 add_definitions(-DALLOW_SERVER_PORT_REUSE)
 add_definitions(-DCMAKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-#add_definitions(-DJOHN_DEBUG)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror \
     -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wno-comment")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror \
     -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wno-comment")
 
-option(APPLY_TRACE "Trace compile and malloc/free" OFF)
+option(APPLY_TRACE "Trace/Debug/Verbose" OFF)
 if (APPLY_TRACE)
     add_definitions(-DTRACE_MALLOC -DTRACE_FREE)
-    set(CMAKE_VERBOSE_MAKEFILE  ON)
+    add_definitions(-DJOHN_DEBUG)
+    set(CMAKE_VERBOSE_MAKEFILE ON)
+    set(CMAKE_BUILD_TYPE Debug)
 endif ()
 
 if (ANDROID)

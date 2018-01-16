@@ -46,6 +46,7 @@ target_link_libraries(hello_udp ${opencv_libs})
 
 link_directories(sdl/lib)
 add_executable(base_media_client
+        src/stream_media/trace_malloc_free.c
         src/stream_media/ffmpeg_base_client.h
         src/stream_media/ffmpeg_base_client.c)
 target_include_directories(base_media_client PRIVATE sdl/include)

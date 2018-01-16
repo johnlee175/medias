@@ -267,10 +267,7 @@ void loop_read_frame(FFmpegClient *client) {
             LOGW("av_packet_alloc failed!\n");
             break;
         }
-        if (av_new_packet(packet, client->codec_context->width * client->codec_context->height)) {
-            LOGW("av_new_packet failed!\n");
-            break;
-        }
+        av_init_packet(packet);
 
         int result_code;
         if ((result_code = av_read_frame(client->format_context, packet)) < 0) {
