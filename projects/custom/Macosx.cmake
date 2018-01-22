@@ -42,6 +42,12 @@ set(hello_udp_code src/udp/udp_trans.h src/udp/udp_trans.c src/udp/main.cpp)
 add_executable(hello_udp ${hello_udp_code})
 target_link_libraries(hello_udp ${opencv_libs})
 
+#################### ff_trans_enc_client #######################
+
+add_executable(ff_trans_enc_client
+        src/stream_media/ff_trans_enc_client.c)
+target_link_libraries(ff_trans_enc_client ${ffmpeg_libs})
+
 #################### base_media_client #######################
 
 link_directories(sdl/lib)
