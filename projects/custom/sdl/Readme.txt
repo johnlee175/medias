@@ -45,9 +45,9 @@ make all && make install
 #3 [ndk-build]
 ./build-scripts/androidbuildlibs.sh
 
-Build For Mac OS X: [2.0.7]
+Build For Mac OS X / Linux: [2.0.7]
 CC=`pwd`/build-scripts/gcc-fat.sh
 rm -rf build && mkdir build && cd build
 ../configure --prefix=`pwd`/dist && make -j4 && make install
 
-Android Include differ with MacOSX Include on SDL_config.h, others are some.
+Different platforms include directory, only the SDL_config.h file is different, others are some.

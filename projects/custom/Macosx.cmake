@@ -1,62 +1,10 @@
-set(CMAKE_BUILD_TYPE Debug)
-
-include_directories(
-        ffmpeg/include
-        opencv/include)
-
-link_directories(
-        ffmpeg/lib
-        opencv/lib)
-
-set(ffmpeg_libs
-        avformat
-        avcodec
-        avutil
-        swscale
-        swresample
-        avdevice
-        avfilter
-        postproc)
-
-set(opencv_lib_version 3.3.0)
-set(opencv_libs
-        opencv_core.${opencv_lib_version}
-        opencv_highgui.${opencv_lib_version}
-        opencv_imgcodecs.${opencv_lib_version}
-        opencv_imgproc.${opencv_lib_version})
-
-#################### john_collections #######################
-
-include_directories(src/john_collections)
-add_library(john_collections SHARED
-        src/john_collections/john_stack.c
-        src/john_collections/john_queue.c
-        src/john_collections/john_ring_buffer.c
-        src/john_collections/john_object_pool.c
-        src/john_collections/john_synchronized_queue.c
-        src/john_collections/john_sync_ring_buffer.c)
+include(UnixPC.cmake)
 
 ################### hello_udp ########################
 
 set(hello_udp_code src/udp/udp_trans.h src/udp/udp_trans.c src/udp/main.cpp)
 add_executable(hello_udp ${hello_udp_code})
 target_link_libraries(hello_udp ${opencv_libs})
-
-#################### ff_trans_enc_client #######################
-
-add_executable(ff_trans_enc_client
-        src/stream_media/ff_trans_enc_client.c)
-target_link_libraries(ff_trans_enc_client ${ffmpeg_libs})
-
-#################### base_media_client #######################
-
-link_directories(sdl/lib)
-add_executable(base_media_client
-        src/stream_media/trace_malloc_free.c
-        src/stream_media/ffmpeg_base_client.h
-        src/stream_media/ffmpeg_base_client.c)
-target_include_directories(base_media_client PRIVATE sdl/include)
-target_link_libraries(base_media_client ${ffmpeg_libs} john_collections SDL2)
 
 #################### hello_stream_media #######################
 

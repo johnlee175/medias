@@ -40,7 +40,7 @@ void *__wrap_malloc(size_t size, const char *file, uint32_t line) {
     ++alloc_count;
     pthread_mutex_unlock(&alloc_count_lock);
     void *ptr = malloc(size);
-    LOGW("__wrap_malloc[%lld]: file=%s; line=%d; pointer=%p; size=%zu;\n",
+    LOGW("__wrap_malloc[%"PRIu64"]: file=%s; line=%d; pointer=%p; size=%zu;\n",
            alloc_count, file, line, ptr, size);
     return ptr;
 }
@@ -49,7 +49,7 @@ void __wrap_free(void *ptr, const char *file, uint32_t line) {
     pthread_mutex_lock(&alloc_count_lock);
     --alloc_count;
     pthread_mutex_unlock(&alloc_count_lock);
-    LOGW("__wrap_free[%lld]: file=%s; line=%d; pointer=%p;\n",
+    LOGW("__wrap_free[%"PRIu64"]: file=%s; line=%d; pointer=%p;\n",
            alloc_count, file, line, ptr);
     free(ptr);
 }

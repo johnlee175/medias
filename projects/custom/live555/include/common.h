@@ -21,6 +21,8 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
+#include <inttypes.h>
+
 #if defined(ANDROID) || defined(__ANDROID__)
 
 #include <android/log.h>

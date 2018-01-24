@@ -1071,12 +1071,13 @@ static void video_callback(uint8_t **data, int *line_size, uint32_t pixel_precis
         Uint32 delay;
         if (pts_millis >= 0) {
             if (llabs(pts_millis - sdl_ctx->video_pts_millis) > SEEK_THRESHOLD) {
-                LOGW("detach video seek: %lld, %lld\n", pts_millis, sdl_ctx->audio_pts_millis);
+                LOGW("detach video seek: %"PRId64", %"PRId64"\n", pts_millis, sdl_ctx->audio_pts_millis);
                 sdl_ctx->video_pts_millis = pts_millis;
                 return;
             }
             if (pts_millis < sdl_ctx->video_pts_millis) {
-                LOGW("pts_millis < sdl_ctx->video_pts_millis: %lld, %lld\n", pts_millis, sdl_ctx->video_pts_millis);
+                LOGW("pts_millis < sdl_ctx->video_pts_millis: %"PRId64", %"PRId64"\n",
+                     pts_millis, sdl_ctx->video_pts_millis);
                 sdl_ctx->video_pts_millis = pts_millis;
                 return;
             }
@@ -1102,12 +1103,13 @@ static void audio_callback(uint8_t **data, int *line_size, uint32_t sample_preci
         Uint32 delay;
         if (pts_millis >= 0) {
             if (llabs(pts_millis - sdl_ctx->audio_pts_millis) > SEEK_THRESHOLD) {
-                LOGW("detach audio seek: %lld, %lld\n", pts_millis, sdl_ctx->audio_pts_millis);
+                LOGW("detach audio seek: %"PRId64", %"PRId64"\n", pts_millis, sdl_ctx->audio_pts_millis);
                 sdl_ctx->audio_pts_millis = pts_millis;
                 return;
             }
             if (pts_millis < sdl_ctx->audio_pts_millis) {
-                LOGW("pts_millis < sdl_ctx->audio_pts_millis: %lld, %lld\n", pts_millis, sdl_ctx->audio_pts_millis);
+                LOGW("pts_millis < sdl_ctx->audio_pts_millis: %"PRId64", %"PRId64"\n", pts_millis,
+                     sdl_ctx->audio_pts_millis);
                 sdl_ctx->audio_pts_millis = pts_millis;
                 return;
             }
