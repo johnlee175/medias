@@ -971,7 +971,7 @@ static int SdlCtx_createVideo(SdlCtx *sdl_ctx, int width, int height) {
     }
     sdl_ctx->window = SDL_CreateWindow("SDL-Play",
                                          SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                         width, height, SDL_WINDOW_SHOWN);
+                                         width, height, SDL_WINDOW_SHOWN|SDL_WINDOW_RESIZABLE);
     if (!sdl_ctx->window) {
         LOGW("Call SDL_CreateWindow failed with %s!\n", SDL_GetError());
         return -1;
@@ -1124,8 +1124,24 @@ static void audio_callback(uint8_t **data, int *line_size, uint32_t sample_preci
 
 static void handle_signal(int sig) {
     if (sig == SIGQUIT || sig == SIGINT) {
+        LOGW("exit(0) by handle_signal!\n");
         exit(0);
     }
+}
+
+static void *play_media(void *user_data) {
+    void **param_array = (void **) user_data;
+    FFmpegClient *client = (FFmpegClient *) param_array[0];
+    int64_t start_play_millis = *((int64_t *) param_array[1]);
+
+    loop_read_frame(client, start_play_millis);
+
+    SDL_Event e;
+    e.type = SDL_USEREVENT;
+    if (SDL_PushEvent(&e) != 1) {
+        LOGW("SDL_PushEvent failed, loop_read_frame quit event loss!\n");
+    }
+    return NULL;
 }
 
 int main(int argc, char **argv) {
@@ -1195,7 +1211,28 @@ int main(int argc, char **argv) {
             }
         }
 
-        loop_read_frame(client, start_play_millis);
+        pthread_t play_media_thread;
+        void *params[2];
+        params[0] = client;
+        params[1] = &start_play_millis;
+        pthread_create(&play_media_thread, NULL, play_media, params);
+
+        SDL_Event e;
+        while (true) {
+            if (SDL_PollEvent(&e) != 0) {
+                if (e.type == SDL_QUIT) {
+                    LOGW("exit(0) by sdl event loop (SDL_QUIT)!\n");
+                    exit(0);
+                }
+                if (e.type == SDL_USEREVENT) {
+                    LOGW("quit sdl event loop!\n");
+                    break;
+                }
+            }
+        }
+
+        pthread_join(play_media_thread, NULL);
+
         close_media(client);
 
         if (videoOutRule.has_video) {
@@ -1210,5 +1247,6 @@ int main(int argc, char **argv) {
 
     trace_malloc_free_destroy();
 
+    LOGW("exit(0) normal quit in main thread!\n");
     return 0;
 }
