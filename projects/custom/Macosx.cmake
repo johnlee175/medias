@@ -1,5 +1,20 @@
 include(UnixPC.cmake)
 
+################### pcm_proc_test ########################
+
+#CMake Settings[environment variable]: export CMAKE_PREFIX_PATH=/usr/local/Cellar/qt/5.10.0_1/lib/cmake
+
+find_package(Qt5Core REQUIRED)
+find_package(Qt5Widgets REQUIRED)
+find_package(Qt5Multimedia REQUIRED)
+include_directories(${Qt5Core_INCLUDE_DIRS})
+include_directories(${Qt5Widgets_INCLUDE_DIRS})
+include_directories(${Qt5Multimedia_INCLUDE_DIRS})
+set(QtLinkLibs ${Qt5Core_LIBRARIES} ${Qt5Widgets_LIBRARIES} ${Qt5Multimedia_LIBRARIES})
+
+add_executable(pcm_proc_test src/others/pcm_proc_test.cpp)
+target_link_libraries(pcm_proc_test ${QtLinkLibs})
+
 ################### hello_udp ########################
 
 set(hello_udp_code src/udp/udp_trans.h src/udp/udp_trans.c src/udp/main.cpp)
