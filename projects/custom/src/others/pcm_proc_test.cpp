@@ -300,3 +300,7 @@ void test_mix(bool method1) {
     fclose(inputB);
     fclose(output);
 }
+
+int main() {
+    return 0;
+}

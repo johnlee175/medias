@@ -1,5 +1,10 @@
 include(UnixPC.cmake)
 
+################### freq_opencv ########################
+
+add_executable(freq_opencv src/others/freq_opencv.cpp)
+target_link_libraries(freq_opencv ${opencv_libs})
+
 ################### pcm_proc_test ########################
 
 #CMake Settings[environment variable]: export CMAKE_PREFIX_PATH=/usr/local/Cellar/qt/5.10.0_1/lib/cmake
