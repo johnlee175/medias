@@ -334,6 +334,11 @@ FFmpegEndpoint *fftec_open_output(const char *url, FFmpegEndpoint *input) {
         return NULL;
     }
 
+    output->format_context->nb_streams = input->format_context->nb_streams;
+    size_t nb_streams_len = sizeof(AVStream *) * input->format_context->nb_streams;
+    output->format_context->streams = (AVStream **) malloc(nb_streams_len);
+    memset(output->format_context->streams, 0, nb_streams_len);
+
     if (output->video_stream_index >= 0) {
         output->format_context->streams[output->video_stream_index] = avformat_new_stream(output->format_context, NULL);
         if (!output->format_context->streams[output->video_stream_index]) {
@@ -365,8 +370,8 @@ FFmpegEndpoint *fftec_open_output(const char *url, FFmpegEndpoint *input) {
             return NULL;
         }
 
-        av_codec_set_pkt_timebase(output->video_codec_context,
-                                  input->format_context->streams[input->video_stream_index]->time_base);
+        output->video_codec_context->time_base
+                = input->format_context->streams[input->video_stream_index]->time_base;
 
         if ((result_code = avcodec_open2(output->video_codec_context, video_codec, NULL))) {
             char error_buffer[ERROR_BUFFER_SIZE];
